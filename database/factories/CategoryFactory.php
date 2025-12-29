@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Faker\Generator as Faker;  // dodaj ovo
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Category>
@@ -11,19 +12,29 @@ use Illuminate\Support\Str;
 class CategoryFactory extends Factory
 {
     /**
-     * Define the model's default state.
+     * The current Faker instance.
      *
-     * @return array<string, mixed>
+     * @var \Faker\Generator
      */
+    protected $faker;
+
+    /**
+     * Create a new factory instance.
+     */
+    public function __construct()
+    {
+        $this->faker = $this->faker ?: \Faker\Factory::create();
+    }
+
     public function definition(): array
     {
-       $name = fake()->unique()->words(3, true); // npr. "Istorijske knjige Srbije"
+        $name = $this->faker->unique()->words(3, true);
 
         return [
             'name' => $name,
             'slug' => Str::slug($name),
-            'description' => fake()->optional()->sentence(10), // ponekad null, ponekad opis
-            'is_active' => fake()->boolean(90), // 90% šansa da bude aktivna
+            'description' => $this->faker->optional()->sentence(10),
+            'is_active' => $this->faker->boolean(90),
         ];
     }
 }
