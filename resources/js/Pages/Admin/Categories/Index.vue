@@ -18,7 +18,7 @@ defineProps({
 </script>
 
 <template>
-    <Head title="Kategorije" />
+    <Head title="Categories" />
 
     <AuthenticatedLayout>
         <div class="py-12">
@@ -29,20 +29,20 @@ defineProps({
                         <div v-if="page.props.flash?.success" class="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
                             {{ page.props.flash.success }}
                         </div>
-                        <h1 class="text-2xl font-bold mb-6">Kategorije</h1>
+                        <h1 class="text-2xl font-bold mb-6">Categories</h1>
 
                         <Link :href="route('admin.categories.create')" class="mb-4 inline-block px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
-                            Dodaj novu kategoriju
+                            Add New category
                         </Link>
 
                         <div class="mt-6 overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Naziv</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Akcije</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
@@ -51,17 +51,17 @@ defineProps({
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ category.slug }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <span :class="category.is_active ? 'text-green-600' : 'text-red-600'">
-                                                {{ category.is_active ? 'Aktivna' : 'Neaktivna' }}
+                                                {{ category.is_active ? 'Active' : 'Inactive' }}
                                             </span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                            <Link :href="route('admin.categories.edit', category.id)"
                                                 class="text-indigo-600 hover:text-indigo-900 mr-4">
-                                                Izmeni
+                                                Edit
                                             </Link>
                                             <DeleteConfirmation
                                                 :item-name="category.name"
-                                                item-type="kategoriju"
+                                                item-type="category"
                                                 :delete-url="route('admin.categories.destroy', category.id)"
                                             />
                                         </td>
@@ -70,7 +70,7 @@ defineProps({
                             </table>
 
                             <p v-if="categories.length === 0" class="text-center py-8 text-gray-500">
-                                Još nema kategorija. Dodajte prvu!
+                                There are no categories yet. Add the first one!
                             </p>
                         </div>
                     </div>

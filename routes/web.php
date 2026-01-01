@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\ProductController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -33,4 +34,5 @@ Route::middleware(['auth'])
         ->name('admin.')
         ->group(function(){
             Route::resource('categories', CategoryController::class);
+            Route::resource('products', ProductController::class);
         });
