@@ -23,14 +23,7 @@ const form = useForm({
                     <div class="p-6 bg-white border-b border-gray-200">
                         <h1 class="text-2xl font-bold mb-6">Edit category</h1>
 
-                        <form @submit.prevent="form.put(route('admin.categories.update', category.id), {
-                            onSuccess: () => {
-                                router.visit(route('admin.categories.index'), {
-                                    preserveState: false,
-                                    preserveScroll: true,
-                                });
-                            },
-                        })">
+                        <form @submit.prevent="form.put(route('admin.categories.update', category.id))">
                             <div class="grid grid-cols-1 gap-6">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Name</label>
