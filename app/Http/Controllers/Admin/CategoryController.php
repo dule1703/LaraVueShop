@@ -49,7 +49,7 @@ class CategoryController extends Controller
             'is_active' => $request->boolean('is_active', true)
         ]);
 
-        return Redirect::route('admin.categories.index')->with('success', 'Kategorija uspešno kreirana!');
+        return Redirect::route('admin.categories.index')->with('success', 'Category is successfully created!');
     }
 
     /**
@@ -88,7 +88,7 @@ class CategoryController extends Controller
             'is_active' => $request->boolean('is_active'),
         ]);
 
-        return Redirect::route('admin.categories.index')->with('success', 'Kategorija uspešno izmenjena!');
+        return Redirect::route('admin.categories.index')->with('success', 'Category is successfully updated!');
     }
 
     /**
@@ -98,6 +98,6 @@ class CategoryController extends Controller
     {
         $category->delete();
 
-        return Redirect::route('admin.categories.index')->with('success', 'Kategorija uspešno obrisana!');
+        return Redirect::route('admin.categories.index')->with('success', 'Category is successfully deleted!');
     }
 }

@@ -59,7 +59,7 @@ class ProductController extends Controller
             'image' => $validated['image'],
             'is_active' => $request->boolean('is_active', true),           
         ]);
-        return Redirect::route('admin.products.index')->with('success', 'Proizvod uspešno kreiran!');
+        return Redirect::route('admin.products.index')->with('success', 'Product is successfully created!');
     }
 
     /**
@@ -110,7 +110,7 @@ public function update(Request $request, Product $product)
             'is_active' => $request->boolean('is_active'),
         ]);
 
-        return Redirect::route('admin.products.index')->with('success', 'Proizvod uspešno izmenjen!');
+        return Redirect::route('admin.products.index')->with('success', 'Product is successfully updated!');
     }
 
     /**
@@ -120,6 +120,6 @@ public function update(Request $request, Product $product)
     {
         $product->delete();
 
-        return Redirect::route('admin.products.index')->with('success', 'Proizvod uspešno obrisan!');
+        return Redirect::route('admin.products.index')->with('success', 'Product is successfully deleted!');
     }
 }

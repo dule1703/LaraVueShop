@@ -24,4 +24,20 @@ class Product extends Model
     {
         return $this->belongsTo(Category::class);
     }
+
+    /**
+     * Get the product's active status as boolean.
+     */
+    public function getIsActiveAttribute($value)
+    {
+        return (bool) $value;
+    }
+
+    /**
+     * Set the product's active status as integer for database.
+     */
+    public function setIsActiveAttribute($value)
+    {
+        $this->attributes['is_active'] = $value ? 1 : 0;
+    }
 }
