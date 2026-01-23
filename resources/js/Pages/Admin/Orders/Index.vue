@@ -23,19 +23,19 @@ defineProps({
                             {{ page.props.flash.success }}
                         </div>
 
-                        <h1 class="text-2xl font-bold mb-6">Orders</h1>
+                        <h1 class="text-2xl font-bold mb-6">Porudžbine</h1>
 
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kupac</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ukupno</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Datum</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Akcije</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
@@ -48,7 +48,7 @@ defineProps({
                                             </span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">{{ order.customer_email }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ order.total_price }} €</td>
+                                        <td class="px-6 py-4 whitespace-nowrap font-medium">{{ order.total_price }} €</td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
                                                   :class="{
@@ -62,11 +62,11 @@ defineProps({
                                             </span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {{ new Date(order.created_at).toLocaleDateString('sr-RS') }}
+                                            {{ new Date(order.created_at).toLocaleString('sr-RS') }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                             <Link :href="route('admin.orders.show', order.id)" class="text-indigo-600 hover:text-indigo-900">
-                                                Details
+                                                Detalji
                                             </Link>
                                         </td>
                                     </tr>
@@ -74,7 +74,7 @@ defineProps({
                             </table>
 
                             <p v-if="orders.length === 0" class="text-center py-8 text-gray-500">
-                                No orders yet.
+                                Još nema porudžbina.
                             </p>
                         </div>
                     </div>
