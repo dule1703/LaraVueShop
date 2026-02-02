@@ -122,4 +122,22 @@ public function update(Request $request, Product $product)
 
         return Redirect::route('admin.products.index')->with('success', 'Product is successfully deleted!');
     }
+
+    public function publicIndex()
+    {
+        $categories = Category::with(['products' => function ($query) {
+            $query->where('is_active', true); 
+        }])->get();
+
+        return Inertia::render('Shop', ['categories' => $categories]);
+    }
+
+    public function publicShow(Product $product)
+    {
+        if (!$product->is_active) {
+            abort(404);
+        }
+
+        return Inertia::render('Product', ['product' => $product]);
+    }
 }
