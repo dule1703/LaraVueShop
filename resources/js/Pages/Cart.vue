@@ -13,7 +13,7 @@ cart.loadFromLocalStorage(); // učitaj korpu pri učitavanju stranice
     <AuthenticatedLayout>
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <h1 class="text-3xl font-bold mb-8">Your cart</h1>
+                <h1 class="text-3xl font-bold mb-8">Your Cart</h1>
 
                 <div v-if="cart.itemCount === 0" class="text-center text-gray-600">
                     Cart is empty.
