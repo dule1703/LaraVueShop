@@ -4,23 +4,16 @@ import { Head } from '@inertiajs/vue3';
 import { useCartStore } from '@/Stores/cart';
 
 const cart = useCartStore();
-cart.loadFromLocalStorage();
 
 const increaseQuantity = (productId) => {
-  cart.addItem(cart.items.find(item => item.id === productId), 1);
+  const item = cart.items.find(item => item.id === productId);
+  if (item) {
+    cart.addItem(item, 1);
+  }
 };
 
 const decreaseQuantity = (productId) => {
-  const item = cart.items.find(item => item.id === productId);
-  if (item) {
-    if (item.quantity > 1) {
-      item.quantity -= 1;
-      cart.saveToLocalStorage();
-      cart.syncWithBackend();
-    } else {
-      cart.removeItem(productId);
-    }
-  }
+  cart.decreaseQuantity(productId);
 };
 </script>
 
@@ -57,7 +50,7 @@ const decreaseQuantity = (productId) => {
               </p>
             </div>
 
-            <!-- Quantity controls – kompaktno i centrirano -->
+            <!-- Quantity controls -->
             <div class="flex items-center justify-center sm:justify-end gap-1 sm:gap-2">
               <button
                 @click="decreaseQuantity(item.id)"

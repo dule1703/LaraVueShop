@@ -1,4 +1,5 @@
 <?php
+// app/Models/User.php
 
 namespace App\Models;
 
@@ -47,6 +48,10 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Relacija sa Cart modelom
+     * Jedan korisnik ima jednu korpu
+     */
     public function cart()
     {
         return $this->hasOne(Cart::class);

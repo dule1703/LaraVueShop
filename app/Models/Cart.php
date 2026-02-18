@@ -1,4 +1,5 @@
 <?php
+// app/Models/Cart.php
 
 namespace App\Models;
 
@@ -14,10 +15,17 @@ class Cart extends Model
         'items',
     ];
 
+    /**
+     * VAŽNO: items se čuva kao JSON string u bazi
+     * Ali cast automatski dekoduje u array kada se čita
+     */
     protected $casts = [
-        'items' => 'array', // Decode JSON to array
+        'items' => 'array',
     ];
 
+    /**
+     * Relacija sa User modelom
+     */
     public function user()
     {
         return $this->belongsTo(User::class);

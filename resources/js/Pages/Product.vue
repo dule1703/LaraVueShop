@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3'; 
 import { useCartStore } from '@/Stores/cart';
 import { ref } from 'vue';
 
@@ -9,13 +9,11 @@ const props = defineProps({
 });
 
 const cart = useCartStore();
-cart.loadFromLocalStorage(); // učitaj korpu
-
 const quantity = ref(1);
 
 const addToCart = () => {
     cart.addItem(props.product, quantity.value);
-    quantity.value = 1;    
+    quantity.value = 1;
 };
 </script>
 
@@ -41,11 +39,14 @@ const addToCart = () => {
                                     type="number"
                                     id="quantity"
                                     min="1"
-                                    class="w-16 rounded border border-gray-300 px-2 py-1 focus:border-blue-500 focus:outline-none"
+                                    class="border rounded px-3 py-2 w-20"
                                 />
                             </div>
 
-                            <button @click="addToCart" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg">
+                            <button
+                                @click="addToCart"
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded"
+                            >
                                 Add to Cart
                             </button>
                         </div>
