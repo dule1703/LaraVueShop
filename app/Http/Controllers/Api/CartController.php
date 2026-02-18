@@ -1,5 +1,4 @@
 <?php
-// app/Http/Controllers/Api/CartController.php
 
 namespace App\Http\Controllers\Api;
 
@@ -106,7 +105,7 @@ class CartController extends Controller
                 'cart' => [
                     'id'         => $cart->id,
                     'user_id'    => $cart->user_id,
-                    'items'      => $cart->items, // Već je array zbog cast-a
+                    'items'      => $cart->items, 
                     'updated_at' => $cart->updated_at,
                 ]
             ]);

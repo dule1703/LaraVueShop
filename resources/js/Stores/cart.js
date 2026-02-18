@@ -1,4 +1,3 @@
-// resources/js/Stores/cart.js
 import { defineStore } from 'pinia';
 import axios from 'axios';
 import { useAuthStore } from '@/Stores/auth';

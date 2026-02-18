@@ -15,9 +15,8 @@ class Cart extends Model
         'items',
     ];
 
-    /**
-     * VAŽNO: items se čuva kao JSON string u bazi
-     * Ali cast automatski dekoduje u array kada se čita
+    /**     
+     * Cast se automatski dekoduje u array kada se čita
      */
     protected $casts = [
         'items' => 'array',

@@ -31,7 +31,7 @@ const addToCart = () => {
                             <p class="text-2xl font-semibold mb-6">{{ props.product.price }} €</p>
                             <p class="text-gray-600 mb-8">{{ props.product.description }}</p>
 
-                            <!-- Količina -->
+                            <!-- Quantity -->
                             <div class="flex items-center mb-4">
                                 <label for="quantity" class="mr-4 text-gray-700">Quantity:</label>
                                 <input
