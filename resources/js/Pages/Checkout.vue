@@ -74,28 +74,27 @@ const submit = () => {
             }
         },
         onError: (errors) => {
-            console.log('Greške sa backend-a:', errors);
-            // Greške se automatski pojavljuju u form.errors
+            console.log('Greške sa backend-a:', errors);            
         },
     });
 };
 </script>
 
 <template>
-    <Head title="Plaćanje" />
+    <Head title="Payment" />
 
     <AuthenticatedLayout>
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 lg:p-10">
-                        <h1 class="text-3xl font-bold mb-10">Završna porudžbina</h1>
+                        <h1 class="text-3xl font-bold mb-10">Final order</h1>
 
                         <!-- Pregled korpe -->
                         <div class="mb-12">
-                            <h2 class="text-2xl font-semibold mb-6">Vaša korpa</h2>
+                            <h2 class="text-2xl font-semibold mb-6">Your cart</h2>
                             <div v-if="cart.isEmpty" class="text-center py-8 text-gray-500">
-                                Korpa je prazna
+                                Cart is empty
                             </div>
                             <div v-else class="border rounded-lg overflow-hidden">
                                 <div v-for="item in cart.items" :key="item.id" class="flex items-center justify-between p-4 border-b last:border-b-0">
@@ -111,7 +110,7 @@ const submit = () => {
                                     </div>
                                 </div>
                                 <div class="p-6 bg-gray-50 flex justify-between text-xl font-bold">
-                                    <span>Ukupno:</span>
+                                    <span>Total:</span>
                                     <span class="text-blue-700">{{ totalPrice.toFixed(2) }} €</span>
                                 </div>
                             </div>
@@ -119,46 +118,46 @@ const submit = () => {
 
                         <!-- Forma za adresu -->
                         <div class="mb-12">
-                            <h2 class="text-2xl font-semibold mb-6">Adresa za isporuku</h2>
+                            <h2 class="text-2xl font-semibold mb-6">Address for Delivery</h2>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Ime *</label>
+                                    <label class="block text-sm font-medium mb-1">First name *</label>
                                     <input v-model="form.first_name" type="text" class="w-full border rounded px-4 py-2" />
                                     <div v-if="form.errors.first_name" class="text-red-600 text-sm mt-1">{{ form.errors.first_name }}</div>
                                 </div>
 
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Prezime *</label>
+                                    <label class="block text-sm font-medium mb-1">Last name *</label>
                                     <input v-model="form.last_name" type="text" class="w-full border rounded px-4 py-2" />
                                     <div v-if="form.errors.last_name" class="text-red-600 text-sm mt-1">{{ form.errors.last_name }}</div>
                                 </div>
 
                                 <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium mb-1">Ulica i broj *</label>
+                                    <label class="block text-sm font-medium mb-1">Address *</label>
                                     <input v-model="form.address" type="text" class="w-full border rounded px-4 py-2" />
                                     <div v-if="form.errors.address" class="text-red-600 text-sm mt-1">{{ form.errors.address }}</div>
                                 </div>
 
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Grad *</label>
+                                    <label class="block text-sm font-medium mb-1">City *</label>
                                     <input v-model="form.city" type="text" class="w-full border rounded px-4 py-2" />
                                     <div v-if="form.errors.city" class="text-red-600 text-sm mt-1">{{ form.errors.city }}</div>
                                 </div>
 
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Poštanski broj *</label>
+                                    <label class="block text-sm font-medium mb-1">Zip code *</label>
                                     <input v-model="form.postal_code" type="text" class="w-full border rounded px-4 py-2" />
                                     <div v-if="form.errors.postal_code" class="text-red-600 text-sm mt-1">{{ form.errors.postal_code }}</div>
                                 </div>
 
                                 <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium mb-1">Telefon *</label>
+                                    <label class="block text-sm font-medium mb-1">Phone *</label>
                                     <input v-model="form.phone" type="tel" class="w-full border rounded px-4 py-2" />
                                     <div v-if="form.errors.phone" class="text-red-600 text-sm mt-1">{{ form.errors.phone }}</div>
                                 </div>
 
                                 <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium mb-1">Napomena (opciono)</label>
+                                    <label class="block text-sm font-medium mb-1">Note (optional)</label>
                                     <textarea v-model="form.notes" rows="3" class="w-full border rounded px-4 py-2"></textarea>
                                 </div>
                             </div>
@@ -171,12 +170,12 @@ const submit = () => {
                                 :disabled="form.processing || cart.isEmpty || !form.isDirty"
                                 class="inline-flex items-center px-10 py-5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                             >
-                                <span v-if="form.processing" class="animate-pulse">Obrada...</span>
-                                <span v-else>Plati sa PayPal / Karticom</span>
+                                <span v-if="form.processing" class="animate-pulse">Processing...</span>
+                                <span v-else>Pay with PayPal</span>
                             </button>
 
-                            <p class="mt-4 text-sm text-gray-500">
-                                Sigurno plaćanje preko PayPal-a. Ne čuvamo podatke o kartici.
+                            <p class="mt-4 text-sm text-gray-500">                                
+                                Secure payment over PayPal. We don't store card information.
                             </p>
 
                             <div v-if="form.errors.message || form.errors.items" class="mt-4 text-red-600 font-medium">
