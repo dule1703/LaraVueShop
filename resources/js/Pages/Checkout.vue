@@ -1,71 +1,187 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Head } from '@inertiajs/vue3';
+import { useForm } from '@inertiajs/vue3';
+import { useCartStore } from '@/Stores/cart';
+import { ref, computed, onMounted } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 
-const props = defineProps({
-    order: {
-        type: Object,
-        default: () => ({ items: [] }), // default da izbegne undefined
-    },
+const page = usePage();
+const cart = useCartStore();
+
+// Kreiramo formu pomoću useForm
+const form = useForm({
+    first_name: '',
+    last_name: '',
+    address: '',
+    city: '',
+    postal_code: '',
+    phone: '',
+    notes: '',
+    items: [],          
+    total_price: 0,
 });
 
-const loading = ref(false);
-const errorMessage = ref(null);
+// Popuni formu ako je korisnik ulogovan
+onMounted(() => {
+    if (usePage().props.auth?.user) {
+        form.first_name = usePage().props.auth.user.first_name || '';
+        form.last_name  = usePage().props.auth.user.last_name  || '';
+    }
 
-const payWithPayPal = () => {
-    loading.value = true;
-    errorMessage.value = null;
-    window.location.href = route('paypal.createPayment', props.order.id);
+    // Sinhronizuj korpu
+    if (usePage().props.auth?.user) {
+        cart.loadFromBackend();
+    } else {
+        cart.loadFromLocalStorage();
+    }
+
+    // Sinhronizuj korpu sa formom (za slanje na backend)
+    form.items = cart.items;
+    form.total_price = cart.totalAmount;
+});
+
+// Ukupna cena (za prikaz)
+const totalPrice = computed(() => cart.totalAmount);
+
+// Validacija na frontendu (opciono, backend će ionako proveriti)
+const isFormValid = computed(() => {
+    return form.first_name.trim() &&
+           form.last_name.trim() &&
+           form.address.trim() &&
+           form.city.trim() &&
+           form.postal_code.trim() &&
+           form.phone.trim() &&
+           cart.items.length > 0;
+});
+
+const submit = () => {
+    // Sinhronizuj korpu neposredno pre slanja (za slučaj da se promenila)
+    form.items = cart.items;
+    form.total_price = cart.totalAmount;
+
+    form.post(route('orders.store'), {
+        onStart: () => {
+            form.processing = true; // automatski, ali možeš koristiti i ref
+        },
+        onFinish: () => {
+            form.processing = false;
+        },
+        onSuccess: (page) => {
+            const orderId = page.props.order?.id;
+            if (orderId) {
+                window.location.href = route('paypal.createPayment', orderId);
+            }
+        },
+        onError: (errors) => {
+            console.log('Greške sa backend-a:', errors);
+            // Greške se automatski pojavljuju u form.errors
+        },
+    });
 };
 </script>
 
 <template>
-    <Head title="Checkout" />
+    <Head title="Plaćanje" />
 
     <AuthenticatedLayout>
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6">
-                        <h1 class="text-3xl font-bold mb-8">Checkout</h1>
+                    <div class="p-6 lg:p-10">
+                        <h1 class="text-3xl font-bold mb-10">Završna porudžbina</h1>
 
-                        <!-- Pregled porudžbine -->
-                        <div class="mb-10">
-                            <h2 class="text-2xl font-semibold mb-4">Vaša porudžbina</h2>
-                            <div class="border rounded-lg p-6 bg-gray-50">
-                                <div class="flex justify-between mb-4">
-                                    <span class="text-lg">Ukupno:</span>
-                                    <span class="text-xl font-bold">
-                                        {{ props.order.total_price ?? 0 }} €
-                                    </span>
+                        <!-- Pregled korpe -->
+                        <div class="mb-12">
+                            <h2 class="text-2xl font-semibold mb-6">Vaša korpa</h2>
+                            <div v-if="cart.isEmpty" class="text-center py-8 text-gray-500">
+                                Korpa je prazna
+                            </div>
+                            <div v-else class="border rounded-lg overflow-hidden">
+                                <div v-for="item in cart.items" :key="item.id" class="flex items-center justify-between p-4 border-b last:border-b-0">
+                                    <div class="flex items-center gap-4">
+                                        <img v-if="item.image" :src="item.image" class="w-16 h-16 object-cover rounded" />
+                                        <div>
+                                            <h3 class="font-medium">{{ item.name }}</h3>
+                                            <p class="text-sm text-gray-600">{{ Number(item.price).toFixed(2) }} € × {{ item.quantity }}</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right font-medium">
+                                        {{ (item.price * item.quantity).toFixed(2) }} €
+                                    </div>
                                 </div>
-                                <p class="text-gray-600">
-                                    Broj stavki: {{ props.order.items?.length ?? 0 }}
-                                </p>
+                                <div class="p-6 bg-gray-50 flex justify-between text-xl font-bold">
+                                    <span>Ukupno:</span>
+                                    <span class="text-blue-700">{{ totalPrice.toFixed(2) }} €</span>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- PayPal dugme -->
-                        <div class="mt-10">
-                            <form :action="route('paypal.createPayment', props.order.id)" method="get">
-    <button
-        type="submit"
-        :disabled="loading"
-        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-    >
-        <span v-if="loading" class="animate-pulse">Preusmeravanje...</span>
-        <span v-else>Plati sa PayPal</span>
-    </button>
-</form>
+                        <!-- Forma za adresu -->
+                        <div class="mb-12">
+                            <h2 class="text-2xl font-semibold mb-6">Adresa za isporuku</h2>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Ime *</label>
+                                    <input v-model="form.first_name" type="text" class="w-full border rounded px-4 py-2" />
+                                    <div v-if="form.errors.first_name" class="text-red-600 text-sm mt-1">{{ form.errors.first_name }}</div>
+                                </div>
 
-                            <p class="text-center text-sm text-gray-500 mt-4">
-                                Secure payment via PayPal. You will be redirected to PayPal.
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Prezime *</label>
+                                    <input v-model="form.last_name" type="text" class="w-full border rounded px-4 py-2" />
+                                    <div v-if="form.errors.last_name" class="text-red-600 text-sm mt-1">{{ form.errors.last_name }}</div>
+                                </div>
+
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium mb-1">Ulica i broj *</label>
+                                    <input v-model="form.address" type="text" class="w-full border rounded px-4 py-2" />
+                                    <div v-if="form.errors.address" class="text-red-600 text-sm mt-1">{{ form.errors.address }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Grad *</label>
+                                    <input v-model="form.city" type="text" class="w-full border rounded px-4 py-2" />
+                                    <div v-if="form.errors.city" class="text-red-600 text-sm mt-1">{{ form.errors.city }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Poštanski broj *</label>
+                                    <input v-model="form.postal_code" type="text" class="w-full border rounded px-4 py-2" />
+                                    <div v-if="form.errors.postal_code" class="text-red-600 text-sm mt-1">{{ form.errors.postal_code }}</div>
+                                </div>
+
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium mb-1">Telefon *</label>
+                                    <input v-model="form.phone" type="tel" class="w-full border rounded px-4 py-2" />
+                                    <div v-if="form.errors.phone" class="text-red-600 text-sm mt-1">{{ form.errors.phone }}</div>
+                                </div>
+
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium mb-1">Napomena (opciono)</label>
+                                    <textarea v-model="form.notes" rows="3" class="w-full border rounded px-4 py-2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dugme za plaćanje -->
+                        <div class="text-center">
+                            <button
+                                @click="submit"
+                                :disabled="form.processing || cart.isEmpty || !form.isDirty"
+                                class="inline-flex items-center px-10 py-5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                            >
+                                <span v-if="form.processing" class="animate-pulse">Obrada...</span>
+                                <span v-else>Plati sa PayPal / Karticom</span>
+                            </button>
+
+                            <p class="mt-4 text-sm text-gray-500">
+                                Sigurno plaćanje preko PayPal-a. Ne čuvamo podatke o kartici.
                             </p>
 
-                            <p v-if="errorMessage" class="text-center text-red-600 mt-4">
-                                {{ errorMessage }}
-                            </p>
+                            <div v-if="form.errors.message || form.errors.items" class="mt-4 text-red-600 font-medium">
+                                {{ form.errors.message || form.errors.items }}
+                            </div>
                         </div>
                     </div>
                 </div>

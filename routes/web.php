@@ -113,3 +113,7 @@ Route::post('/logout', function (Request $request) {
 
     return redirect()->route('home');
 })->name('logout');
+
+// Kreiranje porudžbine (obrada forme + preusmeravanje na PayPal)
+Route::post('/orders', [App\Http\Controllers\OrderController::class, 'store'])
+    ->name('orders.store');

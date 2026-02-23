@@ -11,11 +11,16 @@ class Order extends Model
 
     protected $fillable = [
         'user_id',
+        'first_name',
+        'last_name',
+        'address',
+        'city',
+        'postal_code',
+        'phone',
+        'notes',
         'total_price',
         'status',
         'customer_email',
-        'customer_name',
-        'shipping_address',
     ];
 
     public function items()
@@ -31,5 +36,21 @@ class Order extends Model
     public function payment()
     {
         return $this->hasOne(Payment::class);
+    }
+    
+    public function getFullNameAttribute()
+    {
+        return trim("{$this->first_name} {$this->last_name}");
+    }
+
+    public function getFullAddressAttribute()
+    {
+        $parts = array_filter([
+            $this->address,
+            trim("{$this->postal_code} {$this->city}"),
+            $this->phone ? 'Tel: ' . $this->phone : null,
+            $this->notes,
+        ]);
+        return implode("\n", $parts);
     }
 }
