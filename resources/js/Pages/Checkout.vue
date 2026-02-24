@@ -134,17 +134,17 @@ const submit = () => {
                                     <input v-model="form.last_name" type="text" class="w-full border rounded px-4 py-2" />
                                     <div v-if="form.errors.last_name" class="text-red-600 text-sm mt-1">{{ form.errors.last_name }}</div>
                                 </div>
-
-                                <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium mb-1">Address *</label>
-                                    <input v-model="form.address" type="text" class="w-full border rounded px-4 py-2" />
-                                    <div v-if="form.errors.address" class="text-red-600 text-sm mt-1">{{ form.errors.address }}</div>
-                                </div>
                                 <div class="md:col-span-2">
                                     <label class="block text-sm font-medium mb-1">Email *</label>
                                     <input v-model="form.email" type="email" class="w-full border rounded px-4 py-2" required />
                                     <div v-if="form.errors.email" class="text-red-600 text-sm mt-1">{{ form.errors.email }}</div>
                                 </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium mb-1">Address *</label>
+                                    <input v-model="form.address" type="text" class="w-full border rounded px-4 py-2" />
+                                    <div v-if="form.errors.address" class="text-red-600 text-sm mt-1">{{ form.errors.address }}</div>
+                                </div>
+                                
                                 <div>
                                     <label class="block text-sm font-medium mb-1">City *</label>
                                     <input v-model="form.city" type="text" class="w-full border rounded px-4 py-2" />
@@ -168,6 +168,9 @@ const submit = () => {
                                     <textarea v-model="form.notes" rows="3" class="w-full border rounded px-4 py-2"></textarea>
                                 </div>
                             </div>
+                            <h1><strong>Test params for Paypal</strong></h1>
+                            <h3>Email: sb-ybtyg48467509@personal.example.com</h3>
+                            <h3>Password: T-9kqa1B</h3>
                         </div>
 
                         <!-- Dugme za plaćanje -->

@@ -16,6 +16,7 @@ class Payment extends Model
         'amount',
         'currency',
         'status',
+        'paid_at'
     ];
 
     public function order()

@@ -64,24 +64,28 @@ Route::middleware(['auth'])
             ]);      
         });
 
-Route::get('/paypal/success/{order}', [PayPalController::class, 'success'])->name('paypal.success');
-Route::get('/paypal/cancel/{order}', [PayPalController::class, 'cancel'])->name('paypal.cancel');
-Route::get('/paypal/create-payment/{order}', [PayPalController::class, 'createPayment'])->name('paypal.createPayment');
-
 // Checkout route
 Route::get('/checkout', function () {  
     $order = Order::latest()->first();
     return Inertia::render('Checkout', ['order' => $order]);
-})->name('checkout');
+})->name('checkout');        
 
-// Success route (OrderSuccess.vue)
+// PayPal rute
+Route::get('/paypal/success/{order}', [PayPalController::class, 'success'])->name('paypal.success');
+Route::get('/paypal/cancel/{order}', [PayPalController::class, 'cancel'])->name('paypal.cancel');
+Route::get('/paypal/create-payment/{order}', [PayPalController::class, 'createPayment'])->name('paypal.createPayment');
+
+// Korisničke success/fail rute (sve u Orders folderu)
 Route::get('/order/success/{order}', function (Order $order) {
     return Inertia::render('Orders/OrderSuccess', ['order' => $order]);
 })->name('order.success');
 
-// Route for failed payment
+Route::get('/order/cod-success/{order}', function (Order $order) {
+    return Inertia::render('Orders/OrderCodSuccess', ['order' => $order]);
+})->name('order.cod.success');
+
 Route::get('/payment/failed/{order}', function (Order $order) {
-    return Inertia::render('PaymentFailed', ['order' => $order]);
+    return Inertia::render('Orders/PaymentFailed', ['order' => $order]);
 })->name('payment.failed');
 
 // Javne rute – bez auth i admin middleware-a

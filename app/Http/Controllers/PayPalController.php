@@ -141,7 +141,7 @@ class PayPalController extends Controller
                     $order->payment->update([
                         'status' => 'completed',
                         'payload' => json_encode($response),
-                        'completed_at' => now(),
+                        'paid_at' => now(),
                     ]);
                 }
                 

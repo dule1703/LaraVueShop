@@ -33,8 +33,7 @@ defineProps({
                         <div class="bg-yellow-50 border-l-4 border-yellow-400 p-6 mb-8 text-left max-w-2xl mx-auto">
                             <p class="text-sm text-yellow-700">
                                 <strong>Note for portfolio/demo:</strong><br>
-                                This is a simulated success page. Real PayPal capture failed due to Sandbox permission limitations (PERMISSION_DENIED error).  
-                                In production (live mode) this would update to 'completed' and trigger email notifications/webhook.
+                                This is a simulated success page. 
                             </p>
                         </div>
 
