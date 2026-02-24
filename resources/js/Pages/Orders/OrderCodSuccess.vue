@@ -29,7 +29,7 @@ const props = defineProps({
                         <div class="bg-gray-50 p-6 rounded-lg mb-8 max-w-lg mx-auto">
                             <h2 class="text-2xl font-semibold mb-4">Order #{{ props.order.id }}</h2>
                             <p class="text-lg mb-2">
-                                Total amount: <strong>{{ props.order.total_price.toFixed(2) }} €</strong>
+                                Total amount: <strong>{{ Number(props.order.total_price).toFixed(2) }} €</strong>
                             </p>
                             <p class="text-gray-600 mb-4">
                                 You will pay this amount in cash to the courier when your package arrives.

@@ -1,4 +1,5 @@
 <?php
+// app/Http/Controllers/OrderController.php
 
 namespace App\Http\Controllers;
 
@@ -6,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
@@ -26,8 +28,10 @@ class OrderController extends Controller
             'items.*.price'    => 'required|numeric|min:0',
             'items.*.name'     => 'required|string|max:255',
             'total_price'  => 'required|numeric|min:0.01',
+            'payment_method' => 'required|in:paypal,cod',
         ]);
 
+        // Kreiraj porudžbinu
         $order = Order::create([
             'user_id'         => Auth::id(),
             'first_name'      => $validated['first_name'],
@@ -39,19 +43,33 @@ class OrderController extends Controller
             'notes'           => $validated['notes'] ?? null,
             'total_price'     => $validated['total_price'],
             'status'          => 'pending',
+            'payment_method'  => $validated['payment_method'],
             'customer_email'  => Auth::check() ? Auth::user()->email : $validated['email'],
         ]);
 
+        // Kreiraj order items
         foreach ($validated['items'] as $item) {
             OrderItem::create([
-                'order_id'     => $order->id,
-                'product_id'   => $item['id'],
-                'product_name' => $item['name'],
+                'order_id'      => $order->id,
+                'product_id'    => $item['id'],
+                'product_name'  => $item['name'],
                 'product_price' => $item['price'],
-                'quantity'     => $item['quantity'],
+                'quantity'      => $item['quantity'],
             ]);
         }
 
-        return inertia()->location(route('paypal.createPayment', $order->id));
+        Log::info('Order created', [
+            'order_id' => $order->id,
+            'payment_method' => $order->payment_method,
+            'total' => $order->total_price
+        ]);
+        
+        if ($validated['payment_method'] === 'paypal') {
+            Log::info('Redirecting to PayPal for order: ' . $order->id);
+            return inertia()->location(route('paypal.createPayment', $order->id));
+        } else {            
+            Log::info('COD order - redirecting to success for order: ' . $order->id);
+            return inertia()->location(route('order.cod.success', $order->id));
+        }
     }
 }

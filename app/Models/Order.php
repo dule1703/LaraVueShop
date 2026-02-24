@@ -20,6 +20,7 @@ class Order extends Model
         'notes',
         'total_price',
         'status',
+        'payment_method',
         'customer_email',
     ];
 
