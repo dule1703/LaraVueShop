@@ -15,6 +15,7 @@ class OrderController extends Controller
             'first_name'   => 'required|string|max:255',
             'last_name'    => 'required|string|max:255',
             'address'      => 'required|string|max:255',
+            'email'        => 'required|email|max:255',
             'city'         => 'required|string|max:255',
             'postal_code'  => 'required|string|max:20',
             'phone'        => 'required|string|max:50',
@@ -38,7 +39,7 @@ class OrderController extends Controller
             'notes'           => $validated['notes'] ?? null,
             'total_price'     => $validated['total_price'],
             'status'          => 'pending',
-            'customer_email'  => Auth::user()?->email, 
+            'customer_email'  => Auth::check() ? Auth::user()->email : $validated['email'],
         ]);
 
         foreach ($validated['items'] as $item) {

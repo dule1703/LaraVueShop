@@ -14,6 +14,7 @@ const form = useForm({
     first_name: '',
     last_name: '',
     address: '',
+    email: '',
     city: '',
     postal_code: '',
     phone: '',
@@ -27,6 +28,7 @@ onMounted(() => {
     if (usePage().props.auth?.user) {
         form.first_name = usePage().props.auth.user.first_name || '';
         form.last_name  = usePage().props.auth.user.last_name  || '';
+        form.email = usePage().props.auth.user.email || '';
     }
 
     // Sinhronizuj korpu
@@ -49,6 +51,7 @@ const isFormValid = computed(() => {
     return form.first_name.trim() &&
            form.last_name.trim() &&
            form.address.trim() &&
+           form.email.trim() && form.email.includes('@') &&
            form.city.trim() &&
            form.postal_code.trim() &&
            form.phone.trim() &&
@@ -137,7 +140,11 @@ const submit = () => {
                                     <input v-model="form.address" type="text" class="w-full border rounded px-4 py-2" />
                                     <div v-if="form.errors.address" class="text-red-600 text-sm mt-1">{{ form.errors.address }}</div>
                                 </div>
-
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium mb-1">Email *</label>
+                                    <input v-model="form.email" type="email" class="w-full border rounded px-4 py-2" required />
+                                    <div v-if="form.errors.email" class="text-red-600 text-sm mt-1">{{ form.errors.email }}</div>
+                                </div>
                                 <div>
                                     <label class="block text-sm font-medium mb-1">City *</label>
                                     <input v-model="form.city" type="text" class="w-full border rounded px-4 py-2" />
