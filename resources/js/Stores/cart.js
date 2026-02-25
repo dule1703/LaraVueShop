@@ -81,15 +81,15 @@ export const useCartStore = defineStore('cart', {
      * Očisti celu korpu
      */
     clearCart() {
-    this.items = [];
-    this.saveToLocalStorage();
-    
-    const authStore = useAuthStore();
-    if (authStore.user) {
-        console.log('Clearing cart on backend...');
-        this.syncWithBackend();  
-    }
-},
+        this.items = [];
+        this.saveToLocalStorage();
+        
+        const authStore = useAuthStore();
+        if (authStore.user) {
+            console.log('Clearing cart on backend...');
+            this.syncWithBackend();  
+        }
+    },
 
     /**
      * Sačuvaj korpu u localStorage (SAMO za gosta)

@@ -1,9 +1,20 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head } from '@inertiajs/vue3';
+import { onMounted } from 'vue';
+import { useCartStore } from '@/Stores/cart';
+
 
 defineProps({
     order: Object,
+});
+
+
+const cart = useCartStore();
+
+onMounted(() => {    
+    cart.clearCart();
+    console.log('🗑️ Cart cleared after order');
 });
 </script>
 
