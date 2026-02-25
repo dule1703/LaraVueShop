@@ -25,13 +25,13 @@ class CartController extends Controller
 
             $cart = $user->cart;
             
-            // ✅ Ako nema korpe, vrati praznu strukturu (nemoj kreirati novu)
+            // ✅ Ako nema korpe, vrati praznu strukturu
             if (!$cart) {
                 return response()->json([
                     'cart' => [
                         'id'         => null,
                         'user_id'    => $user->id,
-                        'items'      => [],  // ✅ Eksplicitno prazan array
+                        'items'      => [],  
                         'updated_at' => null,
                     ]
                 ]);

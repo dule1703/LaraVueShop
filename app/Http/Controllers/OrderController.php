@@ -58,6 +58,18 @@ class OrderController extends Controller
             ]);
         }
 
+         // ✅ ISPRAZNI KORPU IZ BAZE
+        if (Auth::check()) {
+            $user = Auth::user();
+            if ($user->cart) {
+                $user->cart->delete();
+                Log::info('Cart deleted for user after order', [
+                    'user_id' => $user->id, 
+                    'order_id' => $order->id
+                ]);
+            }
+        }
+
         Log::info('Order created', [
             'order_id' => $order->id,
             'payment_method' => $order->payment_method,
