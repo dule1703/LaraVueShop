@@ -58,9 +58,12 @@ const deleteOrder = () => {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
                             <div class="bg-gray-50 p-6 rounded-lg">
                                 <h2 class="text-xl font-semibold mb-4">Buyer Information</h2>
-                                <p><strong>Name:</strong> {{ order.full_name }}</p>
+                                <p><strong>Name:</strong> {{ order.first_name }}  {{ order.last_name }}</p>
                                 <p><strong>Email:</strong> {{ order.customer_email }}</p>
                                 <p><strong>Phone:</strong> {{ order.phone }}</p>
+                                <p v-if="order.notes" class="mt-4 text-sm text-gray-600">
+                                    <strong>Notes:</strong> {{ order.notes }}
+                                </p><br>
                                 <p v-if="order.user">
                                     <strong>Registered User:</strong> Yes (ID: {{ order.user.id }})
                                 </p>
@@ -71,10 +74,13 @@ const deleteOrder = () => {
 
                             <div class="bg-gray-50 p-6 rounded-lg">
                                 <h2 class="text-xl font-semibold mb-4">Shipping Address</h2>
-                                <p class="whitespace-pre-line">{{ order.full_address }}</p>
-                                <p v-if="order.notes" class="mt-4 text-sm text-gray-600">
-                                    <strong>Notes:</strong> {{ order.notes }}
-                                </p>
+                                <p><strong>Name:</strong> {{ order.first_name }}  {{ order.last_name }}</p>
+                                <p><strong>Address:</strong> {{ order.address }}</p>
+                                <p><strong>City:</strong> {{ order.city }}</p>
+                                <p><strong>Postal Code:</strong> {{ order.postal_code }}</p>
+                                <p><strong>Phone:</strong> {{ order.phone }}</p>
+                                <p><strong>Email:</strong> {{ order.customer_email }}</p>
+                                
                             </div>
                         </div>
 
