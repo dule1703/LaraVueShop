@@ -11,7 +11,7 @@ defineProps({
 </script>
 
 <template>
-    <Head title="Porudžbine" />
+    <Head title="Orders" />
 
     <AuthenticatedLayout>
         <div class="py-12">
@@ -23,19 +23,20 @@ defineProps({
                             {{ page.props.flash.success }}
                         </div>
 
-                        <h1 class="text-2xl font-bold mb-6">Porudžbine</h1>
+                        <h1 class="text-2xl font-bold mb-6">Orders</h1>
 
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kupac</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Buyer</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ukupno</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Datum</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Akcije</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment method</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
@@ -61,12 +62,13 @@ defineProps({
                                                 {{ order.status }}
                                             </span>
                                         </td>
+                                        <td class="px-6 py-4 whitespace-nowrap font-medium">{{ order.payment_method }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {{ new Date(order.created_at).toLocaleString('sr-RS') }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                             <Link :href="route('admin.orders.show', order.id)" class="text-indigo-600 hover:text-indigo-900">
-                                                Detalji
+                                                Details
                                             </Link>
                                         </td>
                                     </tr>
@@ -74,7 +76,7 @@ defineProps({
                             </table>
 
                             <p v-if="orders.length === 0" class="text-center py-8 text-gray-500">
-                                Još nema porudžbina.
+                                No orders yet.
                             </p>
                         </div>
                     </div>
