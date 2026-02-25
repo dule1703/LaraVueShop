@@ -81,10 +81,15 @@ export const useCartStore = defineStore('cart', {
      * Očisti celu korpu
      */
     clearCart() {
-      this.items = [];
-      this.saveToLocalStorage();
-      this.syncWithBackend();
-    },
+    this.items = [];
+    this.saveToLocalStorage();
+    
+    const authStore = useAuthStore();
+    if (authStore.user) {
+        console.log('Clearing cart on backend...');
+        this.syncWithBackend();  
+    }
+},
 
     /**
      * Sačuvaj korpu u localStorage (SAMO za gosta)
@@ -134,51 +139,59 @@ export const useCartStore = defineStore('cart', {
     /**
      * Sinhronizuj korpu sa backend-om (SAMO za ulogovane)
      */
-    async syncWithBackend() {
-      const authStore = useAuthStore();
-      
-      if (!authStore.user) {
-        console.log('🚫 Sync skipped – korisnik nije ulogovan');
-        return;
-      }
+    
+async syncWithBackend() {
+  const authStore = useAuthStore();
+  
+  if (!authStore.user) {
+    console.log('🚫 Sync skipped – korisnik nije ulogovan');
+    return;
+  }
 
-      try {
-        await axios.post(route('api.cart.sync'), { items: this.items });
-        console.log('✅ Sync success – korpa ažurirana u bazi | Stavki:', this.items.length);
-      } catch (err) {
-        console.error('❌ Sync error:', err);
-      }
-    },
-
+  try {
+    // ✅ Eksplicitno kreiraj plain array (ne Proxy)
+    const itemsToSend = Array.isArray(this.items) 
+      ? JSON.parse(JSON.stringify(this.items))  
+      : [];
+    
+    const payload = { 
+      items: itemsToSend
+    };
+    
+    console.log('📤 Sending sync request:', payload);
+    console.log('   Items type:', typeof payload.items, Array.isArray(payload.items));
+    
+    await axios.post(route('api.cart.sync'), payload);
+    console.log('✅ Sync success – korpa ažurirana u bazi | Stavki:', this.items.length);
+  } catch (err) {
+    console.error('❌ Sync error:', err.response?.data || err.message);
+  }
+},
     /**
      * Učitaj korpu iz backend-a (SAMO za ulogovane)
      */
     async loadFromBackend() {
-      const authStore = useAuthStore();
-      
-      if (!authStore.user) {
-        console.log('🚫 Load skipped – korisnik nije ulogovan');
+    const authStore = useAuthStore();
+    
+    if (!authStore.user) {
+        console.log('User not logged in – loading from localStorage');
         this.loadFromLocalStorage();
         return;
-      }
+    }
 
-      this.isLoading = true;
-
-      try {
+    try {
         const response = await axios.get(route('api.cart.show'));
+        const backendCart = response.data.cart;
+
+        // Ako nema korpe ili items je null/undefined – koristi prazno []
+        this.items = Array.isArray(backendCart?.items) ? backendCart.items : [];
         
-        // Učitaj čistu korpu iz baze
-        const backendItems = response.data.cart?.items || [];
-        this.items = Array.isArray(backendItems) ? backendItems : [];
-        this.isLoading = false;
-        
-        console.log('✅ Load success – korpa učitana iz baze:', this.items.length, 'stavki');
-      } catch (err) {
+        console.log('✅ Backend cart loaded:', this.items.length, 'items');
+    } catch (err) {
         console.error('❌ Load error:', err);
         this.items = [];
-        this.isLoading = false;
-      }
-    },
+    }
+},
 
     /**
      * Merge guest korpe sa backend-om (poziva se SAMO pri login-u)

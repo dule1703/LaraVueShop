@@ -60,7 +60,7 @@ Route::middleware(['auth'])
             Route::resource('categories', CategoryController::class);
             Route::resource('products', ProductController::class);
             Route::resource('orders', OrderController::class)->only([
-                'index', 'show'
+                'index', 'show', 'update', 'destroy'
             ]);      
         });
 

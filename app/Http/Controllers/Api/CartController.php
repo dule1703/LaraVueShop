@@ -23,37 +23,34 @@ class CartController extends Controller
                 return response()->json(['error' => 'Unauthorized'], 401);
             }
 
-            // Ako korisnik nema korpu, kreiraj praznu
             $cart = $user->cart;
             
+            // ✅ Ako nema korpe, vrati praznu strukturu (nemoj kreirati novu)
             if (!$cart) {
-                $cart = Cart::create([
-                    'user_id' => $user->id,
-                    'items'   => [], // Array se automatski pretvara u JSON
+                return response()->json([
+                    'cart' => [
+                        'id'         => null,
+                        'user_id'    => $user->id,
+                        'items'      => [],  // ✅ Eksplicitno prazan array
+                        'updated_at' => null,
+                    ]
                 ]);
             }
 
-            // items je već array zbog cast-a u modelu
-            $items = $cart->items ?? [];
-
-            Log::info('[CART API] Loaded for user ' . $user->id, [
-                'item_count' => count($items),
-                'items' => $items
-            ]);
+            // ✅ Osiguraj da items bude array (čak i ako je null u bazi)
+            $items = is_array($cart->items) ? $cart->items : [];
 
             return response()->json([
                 'cart' => [
                     'id'         => $cart->id,
                     'user_id'    => $cart->user_id,
-                    'items'      => $items, // Već je array
+                    'items'      => $items,
                     'updated_at' => $cart->updated_at,
                 ]
             ]);
 
         } catch (\Exception $e) {
-            Log::error('[CART API] Show error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
+            Log::error('[CART API] Show error: ' . $e->getMessage());
             
             return response()->json([
                 'error' => 'Failed to load cart',
@@ -68,57 +65,38 @@ class CartController extends Controller
      */
     public function sync(Request $request)
     {
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return response()->json(['error' => 'Unauthorized'], 401);
-            }
-
-            // Validacija
-            $request->validate([
-                'items' => 'required|array',
-            ]);
-
-            // Ako korisnik nema korpu, kreiraj je
-            $cart = $user->cart;
-            
-            if (!$cart) {
-                $cart = Cart::create([
-                    'user_id' => $user->id,
-                    'items'   => [],
-                ]);
-            }
-
-            $items = $request->input('items', []);
-
-            // Ažuriraj korpu - array se automatski konvertuje u JSON zbog cast-a
-            $cart->update(['items' => $items]);
-
-            Log::info('[CART API] Synced for user ' . $user->id, [
-                'item_count' => count($items),
-                'items' => $items
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'cart' => [
-                    'id'         => $cart->id,
-                    'user_id'    => $cart->user_id,
-                    'items'      => $cart->items, 
-                    'updated_at' => $cart->updated_at,
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('[CART API] Sync error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'error' => 'Failed to sync cart',
-                'message' => $e->getMessage()
-            ], 500);
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
         }
+
+        $validated = $request->validate([
+            'items' => 'present|array',
+        ]);
+
+        $items = $validated['items'];
+
+        // Uvek ažuriraj ili kreiraj zapis – NIKADA NE BRIŠI
+        $cart = $user->cart;
+
+        if (!$cart) {
+            $cart = Cart::create([
+                'user_id' => $user->id,
+                'items'   => $items,
+            ]);
+        } else {
+            $cart->items = $items;  // ← OVO JE KLJUČNO – uvek ažurira, čak i ako je prazno []
+            $cart->save();
+        }
+
+        Log::info('Cart synced for user ' . $user->id, [
+            'item_count' => count($items),
+            'items'      => $items,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'cart' => $cart,
+        ]);
     }
 }

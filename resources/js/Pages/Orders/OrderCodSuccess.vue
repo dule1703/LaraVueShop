@@ -2,9 +2,12 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head } from '@inertiajs/vue3';
 
+
 const props = defineProps({
     order: Object,
 });
+
+
 </script>
 
 <template>
