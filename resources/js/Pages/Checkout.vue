@@ -171,40 +171,52 @@ const submit = () => {
                         </div>
 
                         <!-- Payment Method -->
-                        <div class="mb-12">
-                            <h2 class="text-2xl font-semibold mb-6">Payment Method</h2>
-                            <div class="space-y-6 bg-gray-50 p-6 rounded-lg border">
-                                <label class="flex items-start cursor-pointer">
-                                    <input 
-                                        type="radio" 
-                                        v-model="form.payment_method" 
-                                        value="paypal" 
-                                        class="mt-1 mr-3 h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500"
-                                    />
-                                    <div>
-                                        <div class="font-medium text-lg">PayPal / Credit Card</div>
-                                        <p class="text-sm text-gray-600">Pay securely online now. You will be redirected to PayPal.</p>
-                                    </div>
-                                </label>
+<!-- Payment Method -->
+<div class="mb-12">
+    <h2 class="text-2xl font-semibold mb-6">Payment Method</h2>
+    <div class="space-y-6 bg-gray-50 p-6 rounded-lg border">
+        <label class="flex items-start cursor-pointer">
+            <input
+                type="radio"
+                v-model="form.payment_method"
+                value="paypal"
+                class="mt-1 mr-3 h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500"
+            />
+            <div>
+                <div class="font-medium text-lg">PayPal / Credit Card</div>
+                <p class="text-sm text-gray-600">Pay securely online now. You will be redirected to PayPal.</p>
+            </div>
+        </label>
 
-                                <label class="flex items-start cursor-pointer">
-                                    <input 
-                                        type="radio" 
-                                        v-model="form.payment_method" 
-                                        value="cod" 
-                                        class="mt-1 mr-3 h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500"
-                                    />
-                                    <div>
-                                        <div class="font-medium text-lg">Cash on Delivery</div>
-                                        <p class="text-sm text-gray-600">Pay in cash to the courier upon delivery.</p>
-                                    </div>
-                                </label>
-                            </div>
+        <!-- TEST DATA – visible ONLY when PayPal is selected -->
+        <div v-if="form.payment_method === 'paypal'" class="mt-4 p-4 bg-yellow-50 border border-yellow-400 rounded-lg text-sm">
+            <p class="font-semibold text-yellow-800 mb-2">Test PayPal credentials (sandbox):</p>
+            <ul class="list-disc pl-5 space-y-1 text-gray-700">
+                <li><strong>Email:</strong> sb-ybtyg48467509@personal.example.com</li>
+                <li><strong>Password:</strong> T-9kqa1B</li>
+                <li><strong>Visa card:</strong> 4111111111111111</li>
+                <li><strong>MasterCard:</strong> 5148652529369811</li>
+            </ul>
+        </div>
 
-                            <div v-if="form.errors.payment_method" class="text-red-600 text-sm mt-2">
-                                {{ form.errors.payment_method }}
-                            </div>
-                        </div>
+        <label class="flex items-start cursor-pointer">
+            <input
+                type="radio"
+                v-model="form.payment_method"
+                value="cod"
+                class="mt-1 mr-3 h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500"
+            />
+            <div>
+                <div class="font-medium text-lg">Cash on Delivery</div>
+                <p class="text-sm text-gray-600">Pay in cash to the courier upon delivery.</p>
+            </div>
+        </label>
+    </div>
+
+    <div v-if="form.errors.payment_method" class="text-red-600 text-sm mt-2">
+        {{ form.errors.payment_method }}
+    </div>
+</div>
 
                         <!-- Submit Button -->
                         <div class="text-center">
