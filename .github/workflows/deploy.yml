@@ -28,7 +28,7 @@ jobs:
 
       - name: Install & build frontend
         run: |
-          npm ci
+          npm ci --legacy-peer-deps
           npm run build
 
       - name: Setup SSH agent
@@ -62,4 +62,4 @@ jobs:
       - name: Zavrsi release na serveru (composer, migracije, cache, symlink swap, cleanup)
         run: |
           ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "cd ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }} && bash deploy/finish-release.sh ${{ steps.vars.outputs.env_name }} ${{ steps.vars.outputs.ts }}"
+            "cd ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }} && bash ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/finish-release.sh ${{ steps.vars.outputs.env_name }} ${{ steps.vars.outputs.ts }}"
