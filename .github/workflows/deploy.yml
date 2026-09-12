@@ -25,10 +25,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          
+
       - name: Install PHP dependencies (for Ziggy)
         run: composer install --no-dev --optimize-autoloader
-        
+
       - name: Install & build frontend
         run: |
           npm ci --legacy-peer-deps
@@ -44,18 +44,9 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Napravi release direktorijum na serveru
+      - name: Napravi release direktorijum i prenesi build (tar + ssh, bez oslanjanja na remote rsync)
         run: |
-          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "mkdir -p ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }}"
-
-      - name: Install rsync
-        run: sudo apt-get update && sudo apt-get install -y rsync
-
-      - name: Rsync build u release direktorijum
-        run: |
-          rsync -az --delete \
-            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+          tar czf - \
             --exclude=".git" \
             --exclude=".github" \
             --exclude="node_modules" \
@@ -63,9 +54,16 @@ jobs:
             --exclude="tests" \
             --exclude="storage" \
             --exclude=".env" \
-            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }}/
+            --exclude="deploy" \
+            . | ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }} && tar xzf - -C ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }}"
+
+      - name: Osvezi finish-release.sh na trajnoj putanji na serveru
+        run: |
+          scp -P ${{ secrets.SSH_PORT }} deploy/finish-release.sh \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/finish-release.sh
 
       - name: Zavrsi release na serveru (composer, migracije, cache, symlink swap, cleanup)
         run: |
           ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "cd ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }} && bash ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/finish-release.sh ${{ steps.vars.outputs.ts }} ${{ steps.vars.outputs.env_name }}"
+            "bash ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/finish-release.sh ${{ steps.vars.outputs.env_name }} ${{ steps.vars.outputs.ts }}"
