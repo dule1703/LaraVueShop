@@ -1,0 +1,65 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main, develop]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Odredi okruzenje i timestamp
+        id: vars
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "env_name=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "env_name=staging" >> "$GITHUB_OUTPUT"
+          fi
+          echo "ts=$(date +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install & build frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Dodaj server u known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Napravi release direktorijum na serveru
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }}"
+
+      - name: Rsync build u release direktorijum
+        run: |
+          rsync -az --delete \
+            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            --exclude=".git" \
+            --exclude=".github" \
+            --exclude="node_modules" \
+            --exclude="vendor" \
+            --exclude="tests" \
+            --exclude="storage" \
+            --exclude=".env" \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }}/
+
+      - name: Zavrsi release na serveru (composer, migracije, cache, symlink swap, cleanup)
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "cd ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/releases/${{ steps.vars.outputs.ts }} && bash deploy/finish-release.sh ${{ steps.vars.outputs.env_name }} ${{ steps.vars.outputs.ts }}"
