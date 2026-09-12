@@ -19,8 +19,8 @@ TS="${2:?Upotreba: finish-release.sh <production|staging> <timestamp>}"
 # ==== PODESI OVE VREDNOSTI ZA SVOJ NALOG ====================================
 CPANEL_USER_HOME="/home/ddweba"                     # potvrdjeno: echo $HOME u cPanel Terminalu
 PROJECT_NAME="laravue-shop"                         # namespace po projektu -> projects/<PROJECT_NAME>/...
-PHP_BIN="/usr/local/bin/ea-php84"                   # tacna putanja: cPanel > Select PHP Version > "PHP Binary (CLI)"
-COMPOSER_BIN="/opt/cpanel/composer/bin/composer"    # proveri: which composer   (cPanel Terminal)
+PHP_BIN="/usr/local/bin/php"                   # tacna putanja: cPanel > Select PHP Version > "PHP Binary (CLI)"
+COMPOSER_BIN="/usr/local/bin/composer"    # proveri: which composer   (cPanel Terminal)
 OPCACHE_RESET_URL=""                                # npr. https://app.example.com/__deploy/opcache-reset?token=XXXX (prazno = preskoci)
 KEEP_RELEASES=5                                     # production=5, staging=3 (vidi inode racunicu u uputstvu)
 # ==============================================================================
