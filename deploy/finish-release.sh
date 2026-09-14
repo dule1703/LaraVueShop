@@ -1,15 +1,8 @@
 #!/bin/bash
 #
-# deploy/finish-release.sh — PLAN A: zavr\u0161ava release NAKON \u0161to je GitHub Actions
-# vec rsync-ovao kod preko SSH-a direktno u releases/<timestamp>/.
 #
 # Poziva se preko SSH-a iz GitHub Actions kao:
 #   ssh ... "cd RELEASES_DIR/<timestamp> && bash deploy/finish-release.sh <env> <timestamp>"
-#
-# Za razliku od stare deploy/run.sh (Plan B, cPanel Git Version Control):
-#   - NE kopira kod (rsync sa GH Actions runner-a je vec to uradio)
-#   - NE zavisi od .cpanel.yml niti cPanel Git checkout-a
-#   - cwd je vec releases/<timestamp>/ kad se skripta pozove (GH Actions radi cd pre ssh komande)
 #
 set -euo pipefail
 
