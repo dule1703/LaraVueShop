@@ -13,8 +13,7 @@ const props = defineProps({
         <div class="py-12 bg-gray-50">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="text-center mb-12">                    
-                    <h1 class="text-5xl font-bold tracking-tight text-gray-900">Our Products</h1>  
-                    <h2 class="text-5xl font-bold tracking-tight text-red-900">Naši proizvodi</h2>               
+                    <h1 class="text-5xl font-bold tracking-tight text-gray-900">Our Products</h1>                                   
                     <p class="mt-4 text-xl text-gray-600">Premium quality • Fast shipping • Best prices</p>
                 </div>
 
