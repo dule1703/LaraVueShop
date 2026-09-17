@@ -104,3 +104,45 @@ jobs:
         run: |
           ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "bash ~/projects/laravue-shop/deploy/${{ steps.vars.outputs.env_name }}/finish-release.sh ${{ steps.vars.outputs.env_name }} ${{ steps.vars.outputs.ts }}"
+
+  notify:
+    needs: [tests, build-and-deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Odredi environment i status
+        id: status
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "env_name=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "env_name=staging" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "${{ needs.tests.result }}" = "success" ] && [ "${{ needs.build-and-deploy.result }}" = "success" ]; then
+            echo "status=USPESNO" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=NEUSPESNO" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Posalji email obavestenje
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.NOTIFY_SMTP_HOST }}
+          server_port: ${{ secrets.NOTIFY_SMTP_PORT }}
+          secure: true
+          username: ${{ secrets.NOTIFY_SMTP_USER }}
+          password: ${{ secrets.NOTIFY_SMTP_PASSWORD }}
+          from: LaraVueShop CI
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          subject: "[LaraVueShop] Deploy ${{ steps.status.outputs.env_name }} - ${{ steps.status.outputs.status }}"
+          body: |
+            Environment: ${{ steps.status.outputs.env_name }}
+            Grana: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Autor: ${{ github.actor }}
+            Poruka commit-a: ${{ github.event.head_commit.message }}
+
+            Tests job: ${{ needs.tests.result }}
+            Build & deploy job: ${{ needs.build-and-deploy.result }}
+
+            Detalji i logovi: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
