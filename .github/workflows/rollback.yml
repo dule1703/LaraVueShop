@@ -1,0 +1,43 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment za rollback"
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+      release_timestamp:
+        description: "Timestamp release-a na koji se vraca (prazno = prethodni release)"
+        required: false
+        type: string
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Dodaj server u known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Osvezi rollback.sh na trajnoj putanji na serveru
+        run: |
+          scp -P ${{ secrets.SSH_PORT }} deploy/rollback.sh \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/projects/laravue-shop/deploy/${{ inputs.environment }}/rollback.sh
+
+      - name: Pokreni rollback na serveru
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "bash ~/projects/laravue-shop/deploy/${{ inputs.environment }}/rollback.sh ${{ inputs.environment }} ${{ inputs.release_timestamp }}"
