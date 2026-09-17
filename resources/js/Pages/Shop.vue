@@ -9,7 +9,7 @@ const props = defineProps({
 
 <template>
     <Head title="Shop" />
-    <AuthenticatedLayout>
+   
         <div class="py-12 bg-gray-50">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="text-center mb-12">                    
