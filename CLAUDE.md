@@ -55,20 +55,26 @@ Odluke o opsegu (potvrđene):
 
 ## POZNATI PROBLEMI — popraviti pre širenja kataloga (Faza 0)
 Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
-1. `routes/web.php:56` — admin rute imaju samo `auth`, bez provere uloge.
-   `role === 'admin'` se proverava SAMO u Vue layout-u → svaki registrovan
-   korisnik može da menja proizvode i vidi tuđe porudžbine.
+1. ✅ **REŠENO (Faza 0, korak 1)** — admin rute su bile zaštićene samo
+   `auth`, bez provere uloge. Rešenje: `app/Http/Middleware/EnsureUserIsAdmin.php`,
+   registrovan kao alias `admin` u `bootstrap/app.php`, primenjen kao
+   `['auth', 'admin']` u `routes/web.php:56` (`auth` mora ostati prvi —
+   gost dobija redirect na login, ne 403). Pokriveno testovima u
+   `tests/Feature/Admin/AdminAccessTest.php` (18 ruta × gost/ne-admin/admin).
 2. `OrderController.php:28-44` — server prihvata `price` i `total_price`
-   od klijenta. Cene se MORAJU računati na serveru.
+   od klijenta. Cene se MORAJU računati na serveru. **[Faza 0, korak 2 — u toku]**
 3. `stock` se nigde ne proverava niti umanjuje. Umanjenje mora biti
    atomsko u transakciji:
    `UPDATE products SET stock = stock - :q WHERE id = :id AND stock >= :q`
+   **[Faza 0, korak 2 — u toku]**
 4. `routes/web.php:69` — `/checkout` šalje `Order::latest()->first()` kao
    prop → tuđi lični podaci u HTML-u.
 5. `routes/web.php:75-89` — `/order/success/{id}` i slične rute su javne
    sa rednim ID-jevima (IDOR).
-6. `CategoryFactory` je pokvaren (prepisan konstruktor), `ProductFactory`
-   prazan → nijedan test kataloga ne može da se napiše dok se ne poprave.
+6. ✅ **REŠENO (Faza 0, korak 1)** — `CategoryFactory` (prepisan
+   konstruktor) i prazan `ProductFactory` popravljeni. Dodati helperi:
+   `CategoryFactory::active()/inactive()`, `ProductFactory::inactive()/
+   outOfStock()`, `UserFactory::admin()`.
 7. `PayPalController::__construct` odmah zove `getAccessToken()` (mrežni
    poziv) → ne može da se mock-uje. Izdvojiti `PaymentGateway` interfejs.
 8. Sandbox PayPal lozinka je hardkodovana u `Checkout.vue:195`.
