@@ -61,12 +61,23 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    `['auth', 'admin']` u `routes/web.php:56` (`auth` mora ostati prvi —
    gost dobija redirect na login, ne 403). Pokriveno testovima u
    `tests/Feature/Admin/AdminAccessTest.php` (18 ruta × gost/ne-admin/admin).
-2. `OrderController.php:28-44` — server prihvata `price` i `total_price`
-   od klijenta. Cene se MORAJU računati na serveru. **[Faza 0, korak 2 — u toku]**
-3. `stock` se nigde ne proverava niti umanjuje. Umanjenje mora biti
-   atomsko u transakciji:
-   `UPDATE products SET stock = stock - :q WHERE id = :id AND stock >= :q`
-   **[Faza 0, korak 2 — u toku]**
+2. ✅ **REŠENO (Faza 0, korak 2)** — server je prihvatao `price`/
+   `total_price` od klijenta. `OrderController::store`
+   (`app/Http/Controllers/OrderController.php:14`) sada isključivo
+   računa cenu iz `products.price`; `items.*.price`, `items.*.name` i
+   `total_price` iz zahteva se ignorišu.
+3. ✅ **REŠENO (Faza 0, korak 2)** — atomsko umanjenje zaliha u
+   `DB::transaction`: `UPDATE products SET stock = stock - :q
+   WHERE id = :id AND stock >= :q`. `affected === 0` → `ValidationException`
+   (422) sa porukom koja knjiga/koliko na stanju, cela transakcija se
+   rollback-uje (uključujući prethodne stavke iste porudžbine).
+   Testovi: `tests/Feature/OrderStoreTest.php` (4 testa: tampered price,
+   dovoljno zaliha, nedovoljno zaliha, race-condition guard — prava
+   konkurentnost se ne može testirati na SQLite `:memory:`, jedan proces/
+   jedna konekcija; oslanja se na isti `WHERE stock >= :q` guard koji na
+   MariaDB-u sa realnim konekcijama rešava trku preko row-level lock-a).
+   **Otvoreno:** nije provereno da li `Checkout.vue` prikazuje 422 poruku
+   korisniku ili generičku grešku.
 4. `routes/web.php:69` — `/checkout` šalje `Order::latest()->first()` kao
    prop → tuđi lični podaci u HTML-u.
 5. `routes/web.php:75-89` — `/order/success/{id}` i slične rute su javne
