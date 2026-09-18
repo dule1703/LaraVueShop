@@ -91,6 +91,12 @@ class OrderController extends Controller
             return $order;
         });
 
+        // Gost pamti sopstvenu porudžbinu kroz sesiju — jedini način da kasnije
+        // pristupi success/cod-success/payment-failed stranici bez naloga (vidi OrderPolicy).
+        if (Auth::guest()) {
+            $request->session()->push('guest_order_ids', $order->id);
+        }
+
          // ✅ ISPRAZNI KORPU IZ BAZE
         if (Auth::check()) {
             $user = Auth::user();

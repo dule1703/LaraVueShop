@@ -65,28 +65,31 @@ Route::middleware(['auth', 'admin'])
         });
 
 // Checkout route
-Route::get('/checkout', function () {  
-    $order = Order::latest()->first();
-    return Inertia::render('Checkout', ['order' => $order]);
-})->name('checkout');        
+Route::get('/checkout', function () {
+    return Inertia::render('Checkout');
+})->name('checkout');
 
 // PayPal rute
 Route::get('/paypal/success/{order}', [PayPalController::class, 'success'])->name('paypal.success');
-Route::get('/paypal/cancel/{order}', [PayPalController::class, 'cancel'])->name('paypal.cancel');
+Route::get('/paypal/cancel/{order}', [PayPalController::class, 'cancel'])
+    ->middleware('order.owner')
+    ->name('paypal.cancel');
 Route::get('/paypal/create-payment/{order}', [PayPalController::class, 'createPayment'])->name('paypal.createPayment');
 
 // Korisničke success/fail rute (sve u Orders folderu)
+// IDOR zaštita: vlasništvo se proverava kroz OrderPolicy (auth korisnik → user_id,
+// gost → order_id sačuvan u sesiji pri kreiranju porudžbine). Neovlašćen pristup -> 403.
 Route::get('/order/success/{order}', function (Order $order) {
     return Inertia::render('Orders/OrderSuccess', ['order' => $order]);
-})->name('order.success');
+})->middleware('can:view,order')->name('order.success');
 
 Route::get('/order/cod-success/{order}', function (Order $order) {
     return Inertia::render('Orders/OrderCodSuccess', ['order' => $order]);
-})->name('order.cod.success');
+})->middleware('can:view,order')->name('order.cod.success');
 
 Route::get('/payment/failed/{order}', function (Order $order) {
     return Inertia::render('Orders/PaymentFailed', ['order' => $order]);
-})->name('payment.failed');
+})->middleware('can:view,order')->name('payment.failed');
 
 // Javne rute – bez auth i admin middleware-a
 Route::get('/product/{product}', [ProductController::class, 'publicShow'])->name('product.details');
