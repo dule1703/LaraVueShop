@@ -78,10 +78,26 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    MariaDB-u sa realnim konekcijama rešava trku preko row-level lock-a).
    **Otvoreno:** nije provereno da li `Checkout.vue` prikazuje 422 poruku
    korisniku ili generičku grešku.
-4. `routes/web.php:69` — `/checkout` šalje `Order::latest()->first()` kao
-   prop → tuđi lični podaci u HTML-u.
-5. `routes/web.php:75-89` — `/order/success/{id}` i slične rute su javne
-   sa rednim ID-jevima (IDOR).
+4. ✅ **REŠENO (Faza 0, korak 3)** — `/checkout` (`routes/web.php:68`)
+   više ne šalje `Order::latest()->first()` kao prop.
+5. ✅ **REŠENO (Faza 0, korak 3)** — IDOR na `/order/success/{order}`,
+   `/order/cod-success/{order}`, `/payment/failed/{order}`,
+   `/paypal/cancel/{order}`. Rešenje: `app/Policies/OrderPolicy.php::view()`
+   (vlasnik preko `user_id`, gost preko `session('guest_order_ids')`,
+   upisuje se u `OrderController::store:95-99` samo za `Auth::guest()`).
+   Tri rute dobile `middleware('can:view,order')`. **Izuzetak:**
+   `/paypal/cancel/{order}` ne koristi `can:view,order` jer
+   `PayPalController::cancel()` ne tipizira `Order` parametar (nema
+   implicit route-model binding) — umesto toga poseban middleware
+   `app/Http/Middleware/AuthorizeOrderAccess.php` (alias `order.owner`)
+   ručno učitava i autorizuje. **Kad se reši problem #7 (PayPal iza
+   interfejsa), razmotriti da li `paypal.cancel` može da pređe na
+   standardni `can:view,order` i da se `order.owner` middleware ukloni.**
+   Napomena: Cart (`resources/js/Stores/cart.js`) je isključivo
+   frontend/localStorage, nema server-side session tracking — nije mogao
+   da se reiskoristi za gost/order ownership, pa je `guest_order_ids`
+   nov mehanizam.
+   Testovi: `tests/Feature/OrderAccessTest.php`.
 6. ✅ **REŠENO (Faza 0, korak 1)** — `CategoryFactory` (prepisan
    konstruktor) i prazan `ProductFactory` popravljeni. Dodati helperi:
    `CategoryFactory::active()/inactive()`, `ProductFactory::inactive()/
@@ -114,19 +130,3 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
 - **Jedna DDL promena po migraciji** — na MariaDB-u DDL nije transakcioni;
   migracija koja pukne na pola ostavlja bazu delimično migriranu i sledeći
   deploy puca na "table already exists".
-- Prebacivanje postojećih podataka ide kroz **idempotentnu artisan
-  komandu** pokrenutu ručno preko SSH-a, nikad kroz migraciju. Seederi se
-  ne pokreću u pipeline-u.
-- Ne spajati nepovezane velike promene u isti release (npr. Redis
-  migraciju i promenu modela) — rollback mora da ostane jednostavan.
-- `deploy/*/shared/.env` i `shared/storage/` žive na serveru, nisu u
-  repo-u. `vendor/` se ne šalje tar-om, instalira se na serveru.
-
-## Gotcha-ovi (ne ponavljati grešku)
-- `current`/`current.tmp` MORA biti symlink — `mv -T` inače puca
-- `finish-release.sh` na serveru se PREPISUJE svakim deploy-em — ručne
-  izmene preko File Manager-a se gube, sve ide kroz git
-- rsync nije dostupan — tar+ssh je trajno rešenje
-- SQLite↔MariaDB razlike: `fullText()`/`whereFullText()` ne rade na
-  SQLite-u; LIKE se različito ponaša sa č/ć/š/ž/đ. Zato normalizovana
-  `search_text` kolona + običan LIKE, isto ponašanje na obe baze.
