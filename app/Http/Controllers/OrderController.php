@@ -5,14 +5,19 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
     public function store(Request $request)
     {
+        // Napomena: cena i total_price se NAMERNO ne uzimaju od klijenta.
+        // Server ih računa iz baze (products.price) u transakciji ispod.
         $validated = $request->validate([
             'first_name'   => 'required|string|max:255',
             'last_name'    => 'required|string|max:255',
@@ -23,40 +28,68 @@ class OrderController extends Controller
             'phone'        => 'required|string|max:50',
             'notes'        => 'nullable|string',
             'items'        => 'required|array|min:1',
-            'items.*.id'   => 'required|exists:products,id',
+            'items.*.id'   => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
-            'items.*.price'    => 'required|numeric|min:0',
-            'items.*.name'     => 'required|string|max:255',
-            'total_price'  => 'required|numeric|min:0.01',
             'payment_method' => 'required|in:paypal,cod',
         ]);
 
-        // Kreiraj porudžbinu
-        $order = Order::create([
-            'user_id'         => Auth::id(),
-            'first_name'      => $validated['first_name'],
-            'last_name'       => $validated['last_name'],
-            'address'         => $validated['address'],
-            'city'            => $validated['city'],
-            'postal_code'     => $validated['postal_code'],
-            'phone'           => $validated['phone'],
-            'notes'           => $validated['notes'] ?? null,
-            'total_price'     => $validated['total_price'],
-            'status'          => 'pending',
-            'payment_method'  => $validated['payment_method'],
-            'customer_email'  => Auth::check() ? Auth::user()->email : $validated['email'],
-        ]);
+        $order = DB::transaction(function () use ($validated) {
+            $totalPrice = 0;
+            $orderItems = [];
 
-        // Kreiraj order items
-        foreach ($validated['items'] as $item) {
-            OrderItem::create([
-                'order_id'      => $order->id,
-                'product_id'    => $item['id'],
-                'product_name'  => $item['name'],
-                'product_price' => $item['price'],
-                'quantity'      => $item['quantity'],
+            foreach ($validated['items'] as $item) {
+                $product = Product::find($item['id']);
+
+                if (! $product) {
+                    throw ValidationException::withMessages([
+                        'items' => 'Jedna od knjiga iz korpe više ne postoji.',
+                    ]);
+                }
+
+                // Atomsko umanjenje zaliha — uspeva samo ako ima dovoljno stanja.
+                $affected = Product::where('id', $product->id)
+                    ->where('stock', '>=', $item['quantity'])
+                    ->update(['stock' => DB::raw('stock - ' . (int) $item['quantity'])]);
+
+                if ($affected === 0) {
+                    $currentStock = Product::where('id', $product->id)->value('stock') ?? 0;
+
+                    throw ValidationException::withMessages([
+                        'items' => "Nema dovoljno zaliha za knjigu \"{$product->name}\" (na stanju: {$currentStock}, traženo: {$item['quantity']}).",
+                    ]);
+                }
+
+                $orderItems[] = [
+                    'product_id'    => $product->id,
+                    'product_name'  => $product->name,
+                    'product_price' => $product->price,
+                    'quantity'      => $item['quantity'],
+                ];
+
+                $totalPrice += $product->price * $item['quantity'];
+            }
+
+            $order = Order::create([
+                'user_id'         => Auth::id(),
+                'first_name'      => $validated['first_name'],
+                'last_name'       => $validated['last_name'],
+                'address'         => $validated['address'],
+                'city'            => $validated['city'],
+                'postal_code'     => $validated['postal_code'],
+                'phone'           => $validated['phone'],
+                'notes'           => $validated['notes'] ?? null,
+                'total_price'     => $totalPrice,
+                'status'          => 'pending',
+                'payment_method'  => $validated['payment_method'],
+                'customer_email'  => Auth::check() ? Auth::user()->email : $validated['email'],
             ]);
-        }
+
+            foreach ($orderItems as $orderItem) {
+                OrderItem::create($orderItem + ['order_id' => $order->id]);
+            }
+
+            return $order;
+        });
 
          // ✅ ISPRAZNI KORPU IZ BAZE
         if (Auth::check()) {
@@ -64,7 +97,7 @@ class OrderController extends Controller
             if ($user->cart) {
                 $user->cart->delete();
                 Log::info('Cart deleted for user after order', [
-                    'user_id' => $user->id, 
+                    'user_id' => $user->id,
                     'order_id' => $order->id
                 ]);
             }
@@ -75,11 +108,11 @@ class OrderController extends Controller
             'payment_method' => $order->payment_method,
             'total' => $order->total_price
         ]);
-        
+
         if ($validated['payment_method'] === 'paypal') {
             Log::info('Redirecting to PayPal for order: ' . $order->id);
             return inertia()->location(route('paypal.createPayment', $order->id));
-        } else {            
+        } else {
             Log::info('COD order - redirecting to success for order: ' . $order->id);
             return inertia()->location(route('order.cod.success', $order->id));
         }
