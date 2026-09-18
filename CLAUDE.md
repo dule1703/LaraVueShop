@@ -5,8 +5,7 @@ konvencije i kontekst koji ne treba svaki put ponovo objašnjavati.
 
 ## Komunikacija
 - Odgovaraj na srpskom jeziku.
-- Za složenije arhitekturne ili bezbednosne odluke koristi extended thinking
-  (npr. Redis migracija, promene u deploy pipeline-u).
+- Za složenije arhitekturne ili bezbednosne odluke koristi extended thinking.
 
 ## Model selection strategija
 - **Haiku** — čitanje fajlova, formatiranje, prosti checks
@@ -19,53 +18,98 @@ konvencije i kontekst koji ne treba svaki put ponovo objašnjavati.
 - Paralelni sub-agenti za nezavisne zadatke (npr. nezavisni test fajlovi).
 - Centralni orchestrator koordinira zadatke; ne izvršava detalje sam.
 
+## Šta je ovaj projekat
+Vežbovni e-commerce projekat koji se proširuje u **online knjižaru**
+(domaći autori, po žanrovima i oblastima). Nije prava produkcija.
+
+Odluke o opsegu (potvrđene):
+- **Samo knjige** — nema drugih vrsta proizvoda u opsegu
+- Valuta: **EUR** (PayPal ne podržava RSD kao valutu naplate)
+- Ciljna veličina kataloga: 300-500 knjiga na početku, ali šema i upiti
+  moraju da podnesu i hiljade (paginacija obavezna, nema učitavanja
+  celog kataloga odjednom)
+- Podrška za **ćirilicu i latinicu** u prikazu i pretrazi je obavezna
+  (normalizovana `books.search_text` kolona, ne fulltext)
+
 ## Stack
 - Laravel 12 (PHP), Inertia.js 2, Vue 3 — CSR, ne SSR
 - PHP 8.2 lokalno / PHP 8.4 na serveru (razlika je namerna, vidi Deploy)
-- Node 22 lokalno; frontend build se radi na GitHub Actions runner-u, ne na
-  serveru
-- DB: MariaDB 10.11 (produkcija/staging), SQLite in-memory u CI testovima
-- Plaćanja: PayPal (paypal/paypal-server-sdk, srmklive/paypal) i Stripe
-  (stripe/stripe-php) — u testovima uvek mock-ovano, nikad pravi API pozivi
-- Frontend UI: shadcn-vue komponente (style: new-york), Tailwind, lucide ikone
+- Node 22 lokalno; frontend build se radi na GitHub Actions runner-u
+- DB: MariaDB 10.11 (produkcija/staging), SQLite `:memory:` u testovima
+- Plaćanja: **PayPal implementiran** (srmklive/paypal, paypal-server-sdk);
+  **Stripe NIJE implementiran** — `stripe/stripe-php` je instaliran ali se
+  nigde ne koristi, validacija dozvoljava samo `paypal` i `cod`
+- Frontend: Tailwind, lucide ikone. shadcn-vue je samo podešen
+  (`components.json`), nijedna komponenta još nije dodata
+
+## Autentikacija — koristi postojeći Breeze
+- Projekat ima **Laravel Breeze** sa kompletnim auth tokom (registracija,
+  login, password reset, email verification, profil) i postojećim testovima
+  koji ga pokrivaju.
+- **Ne praviti paralelne auth rute/kontrolere.** Ako treba drugačiji
+  izgled, menjaju se samo Vue stranice; rute i kontroleri ostaju.
+- Podaci o kupcu (adresa, telefon) treba da žive uz korisnički nalog
+  (profil / `addresses` tabela), a `orders` i dalje čuva **snapshot**
+  adrese u trenutku porudžbine (isti obrazac kao `product_name`/
+  `product_price` — istorijska porudžbina se ne sme menjati unazad).
+
+## POZNATI PROBLEMI — popraviti pre širenja kataloga (Faza 0)
+Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
+1. `routes/web.php:56` — admin rute imaju samo `auth`, bez provere uloge.
+   `role === 'admin'` se proverava SAMO u Vue layout-u → svaki registrovan
+   korisnik može da menja proizvode i vidi tuđe porudžbine.
+2. `OrderController.php:28-44` — server prihvata `price` i `total_price`
+   od klijenta. Cene se MORAJU računati na serveru.
+3. `stock` se nigde ne proverava niti umanjuje. Umanjenje mora biti
+   atomsko u transakciji:
+   `UPDATE products SET stock = stock - :q WHERE id = :id AND stock >= :q`
+4. `routes/web.php:69` — `/checkout` šalje `Order::latest()->first()` kao
+   prop → tuđi lični podaci u HTML-u.
+5. `routes/web.php:75-89` — `/order/success/{id}` i slične rute su javne
+   sa rednim ID-jevima (IDOR).
+6. `CategoryFactory` je pokvaren (prepisan konstruktor), `ProductFactory`
+   prazan → nijedan test kataloga ne može da se napiše dok se ne poprave.
+7. `PayPalController::__construct` odmah zove `getAccessToken()` (mrežni
+   poziv) → ne može da se mock-uje. Izdvojiti `PaymentGateway` interfejs.
+8. Sandbox PayPal lozinka je hardkodovana u `Checkout.vue:195`.
+9. `@/components` alias vs postojeći `resources/js/Components` — razlika
+   samo u velikom slovu. Radi na Windows-u, **puca na Ubuntu runner-u**.
+   Razrešiti pre prve shadcn-vue komponente.
 
 ## Deploy arhitektura (Faze 1-4, potvrđeno radi)
 - Shared cPanel hosting (unlimited.rs), korisnik `ddweba`,
   `/home/ddweba/projects/laravue-shop/`
 - GitHub repo: `dule1703/LaraVueShop`; `main` → production,
   `develop` → staging (branch protection + PR tok aktivan)
-- CI/CD: GitHub Actions (`.github/workflows/deploy.yml`) — build na runner-u
-  (composer install radi Ziggy, npm build), tar+ssh transfer (rsync nije
-  dostupan na hostingu), `finish-release.sh` na serveru radi
+- CI/CD: `.github/workflows/deploy.yml` — build na runner-u, tar+ssh
+  transfer (rsync nije dostupan), `finish-release.sh` na serveru:
   composer install --no-dev, migracije, cache, atomski symlink swap
-  (`releases/<timestamp>` → `current`)
-- Rollback: postoji formalizovana skripta (workflow_dispatch, bira se
-  release timestamp)
-- Testovi: Feature testovi na PHP 8.4 (poklapa server), SQLite :memory:,
-  pokreću se pre deploy-a
-- Notifikacije: email preko postojećeg SMTP-a (mail.ddwebapps.com) na
-  uspeh/neuspeh deploy-a
-- GitHub MCP connector povezan i korišćen (claude.ai custom connector →
-  api.githubcopilot.com/mcp)
-- Inode budžet je stvarno ograničenje na hostingu (ne disk) — zato
-  `KEEP_RELEASES` (production=5, staging=3) i cleanup starih release-ova
+- Rollback skripta (workflow_dispatch, bira se release timestamp)
+- Testovi na PHP 8.4 + SQLite `:memory:`, pre deploy-a
+- Email notifikacije o deploy-u (mail.ddwebapps.com)
+- Inode budžet je stvarno ograničenje (ne disk) — `KEEP_RELEASES`
+  production=5, staging=3
 
-## Poznati "gotcha"-ovi (ne ponavljati grešku)
-- `current`/`current.tmp` MORA biti symlink, nikad običan direktorijum —
-  atomic swap (`mv -T`) inače puca
+## Pravila za migracije i deploy
+- Migracije MORAJU biti aditivne/unazad-kompatibilne (expand/contract) —
+  `rollback.sh` vraća samo kod, ne šemu, pa stariji release mora da radi
+  sa novijom šemom.
+- **Jedna DDL promena po migraciji** — na MariaDB-u DDL nije transakcioni;
+  migracija koja pukne na pola ostavlja bazu delimično migriranu i sledeći
+  deploy puca na "table already exists".
+- Prebacivanje postojećih podataka ide kroz **idempotentnu artisan
+  komandu** pokrenutu ručno preko SSH-a, nikad kroz migraciju. Seederi se
+  ne pokreću u pipeline-u.
+- Ne spajati nepovezane velike promene u isti release (npr. Redis
+  migraciju i promenu modela) — rollback mora da ostane jednostavan.
+- `deploy/*/shared/.env` i `shared/storage/` žive na serveru, nisu u
+  repo-u. `vendor/` se ne šalje tar-om, instalira se na serveru.
+
+## Gotcha-ovi (ne ponavljati grešku)
+- `current`/`current.tmp` MORA biti symlink — `mv -T` inače puca
 - `finish-release.sh` na serveru se PREPISUJE svakim deploy-em — ručne
-  izmene preko File Manager-a se gube, sve mora ići kroz git
-- rsync nije dostupan na ovom hosting nalogu — tar+ssh je trajno rešenje
-
-## Granice rada
-- `deploy/*/shared/.env` i `deploy/*/shared/storage/` žive na serveru,
-  nisu deo repo-a — ne pokušavati ih generisati/commit-ovati
-- `vendor/` se ne šalje na server preko tar-a — instalira se na serveru
-- Migracije moraju biti unazad-kompatibilne (expand/contract), bez
-  maintenance moda
-
-## Otvoreno (Faza 5, u toku)
-- Redis migracija za cache/session/queue (trenutno `database` driver)
-- Konsolidacija `finish-release.sh` i `rollback.sh` u zajednički
-  `deploy/common.sh`
-- Prava test pokrivenost: checkout tok, PayPal/Stripe (mock), cart logika
+  izmene preko File Manager-a se gube, sve ide kroz git
+- rsync nije dostupan — tar+ssh je trajno rešenje
+- SQLite↔MariaDB razlike: `fullText()`/`whereFullText()` ne rade na
+  SQLite-u; LIKE se različito ponaša sa č/ć/š/ž/đ. Zato normalizovana
+  `search_text` kolona + običan LIKE, isto ponašanje na obe baze.
