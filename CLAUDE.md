@@ -76,8 +76,13 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    konkurentnost se ne može testirati na SQLite `:memory:`, jedan proces/
    jedna konekcija; oslanja se na isti `WHERE stock >= :q` guard koji na
    MariaDB-u sa realnim konekcijama rešava trku preko row-level lock-a).
-   **Otvoreno:** nije provereno da li `Checkout.vue` prikazuje 422 poruku
-   korisniku ili generičku grešku.
+   **✅ PROVERENO** — `Checkout.vue:228-230` već prikazuje
+   `form.errors.message || form.errors.items` ispod submit dugmeta (blok
+   postoji od pre Faze 0, commit `461e8bec8...`), a Inertia `useForm`
+   automatski puni `form.errors` iz 422 odgovora. Pošto backend baca
+   `ValidationException::withMessages(['items' => ...])`, korisnik vidi
+   tačnu poruku ("Nema dovoljno zaliha za knjigu ... na stanju: X,
+   traženo: Y"), ne generičku grešku. Kod nije menjan.
 4. ✅ **REŠENO (Faza 0, korak 3)** — `/checkout` (`routes/web.php:68`)
    više ne šalje `Order::latest()->first()` kao prop.
 5. ✅ **REŠENO (Faza 0, korak 3)** — IDOR na `/order/success/{order}`,
