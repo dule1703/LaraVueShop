@@ -2,27 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\PaymentGateway;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Models\Order;
-use Srmklive\PayPal\Services\PayPal as PayPalClient;
 
 class PayPalController extends Controller
 {
-    private $provider;
-
-    public function __construct()
+    public function __construct(private PaymentGateway $gateway)
     {
-        $this->provider = new PayPalClient;
-        $this->provider->setApiCredentials(config('paypal'));
-        $this->provider->getAccessToken();
     }
 
-    public function createPayment($orderId)
+    public function createPayment(Order $order)
     {
-        $orderId = (int) $orderId;
-        $order = Order::findOrFail($orderId);
-
         // Provera postojećeg plaćanja
         if ($order->payment) {
             if ($order->payment->status === 'completed') {
@@ -36,34 +28,7 @@ class PayPalController extends Controller
         }
 
         try {
-            // Kreiranje PayPal order-a
-            $response = $this->provider->createOrder([
-                "intent" => "CAPTURE",
-                "purchase_units" => [
-                    [
-                        "reference_id" => "order_" . $order->id,
-                        "amount" => [
-                            "currency_code" => "EUR",
-                            "value" => number_format($order->total_price, 2, '.', ''),
-                            "breakdown" => [
-                                "item_total" => [
-                                    "currency_code" => "EUR",
-                                    "value" => number_format($order->total_price, 2, '.', '')
-                                ]
-                            ]
-                        ],
-                        "description" => "Porudžbina #" . $order->id,
-                        "custom_id" => (string) $order->id,
-                    ]
-                ],
-                "application_context" => [
-                    "return_url" => route('paypal.success', $order->id),
-                    "cancel_url" => route('paypal.cancel', $order->id),
-                    "brand_name" => env('APP_NAME', 'LaraVueShop'),
-                    "locale" => "sr-RS",
-                    "user_action" => "PAY_NOW"
-                ]
-            ]);
+            $response = $this->gateway->createOrder($order);
 
             Log::info('PayPal create response', [
                 'order_id' => $order->id,
@@ -116,9 +81,8 @@ class PayPalController extends Controller
         }
     }
 
-    public function success(Request $request, $orderId)
+    public function success(Request $request, Order $order)
     {
-        $order = Order::findOrFail($orderId);
         $paypalOrderId = $request->query('token');
 
         if (!$paypalOrderId) {
@@ -127,10 +91,10 @@ class PayPalController extends Controller
 
         try {
             // Capture payment
-            $response = $this->provider->capturePaymentOrder($paypalOrderId);
+            $response = $this->gateway->captureOrder($paypalOrderId);
 
             Log::info('PayPal capture response', [
-                'order_id' => $orderId,
+                'order_id' => $order->id,
                 'paypal_order_id' => $paypalOrderId,
                 'response' => $response,
             ]);
@@ -144,7 +108,7 @@ class PayPalController extends Controller
                         'paid_at' => now(),
                     ]);
                 }
-                
+
                 $order->update([
                     'status' => 'paid',
                     'paid_at' => now(),
@@ -158,7 +122,7 @@ class PayPalController extends Controller
 
         } catch (\Exception $e) {
             Log::error('PayPal capture error', [
-                'order_id' => $orderId,
+                'order_id' => $order->id,
                 'message' => $e->getMessage(),
             ]);
 
@@ -172,11 +136,9 @@ class PayPalController extends Controller
         }
     }
 
-    public function cancel(Request $request, $orderId)
+    public function cancel(Request $request, Order $order)
     {
-        $order = Order::findOrFail($orderId);
-
-        Log::info('PayPal payment cancelled', ['order_id' => $orderId]);
+        Log::info('PayPal payment cancelled', ['order_id' => $order->id]);
 
         if ($order->payment) {
             $order->payment->update([
@@ -184,7 +146,7 @@ class PayPalController extends Controller
                 'cancelled_at' => now(),
             ]);
         }
-        
+
         $order->update(['status' => 'cancelled']);
 
         return redirect()->route('checkout')->with('error', 'Plaćanje je otkazano.');
