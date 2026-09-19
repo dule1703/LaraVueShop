@@ -70,11 +70,15 @@ Route::get('/checkout', function () {
 })->name('checkout');
 
 // PayPal rute
-Route::get('/paypal/success/{order}', [PayPalController::class, 'success'])->name('paypal.success');
+Route::get('/paypal/success/{order}', [PayPalController::class, 'success'])
+    ->middleware('can:view,order')
+    ->name('paypal.success');
 Route::get('/paypal/cancel/{order}', [PayPalController::class, 'cancel'])
-    ->middleware('order.owner')
+    ->middleware('can:view,order')
     ->name('paypal.cancel');
-Route::get('/paypal/create-payment/{order}', [PayPalController::class, 'createPayment'])->name('paypal.createPayment');
+Route::get('/paypal/create-payment/{order}', [PayPalController::class, 'createPayment'])
+    ->middleware('can:view,order')
+    ->name('paypal.createPayment');
 
 // Korisničke success/fail rute (sve u Orders folderu)
 // IDOR zaštita: vlasništvo se proverava kroz OrderPolicy (auth korisnik → user_id,

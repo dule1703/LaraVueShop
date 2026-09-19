@@ -178,11 +178,11 @@ class OrderAccessTest extends TestCase
     }
 
     /**
-     * Samo IDOR provera na nivou rute/middleware-a. Ne testiramo da vlasnik
-     * uspešno prođe kroz PayPalController::cancel — konstruktor tog kontrolera
-     * odmah zove PayPal getAccessToken() (mrežni poziv, poznati problem #7 iz
-     * CLAUDE.md), pa se ne može pokrenuti u testovima bez pravih/mock kredencijala.
-     * To je odvojen problem od IDOR-a koji ovaj korak popravlja.
+     * IDOR provera na nivou rute/middleware-a (can:view,order — vidi Fazu 0,
+     * korak 4). Vlasnički "happy path" kroz PayPalController::cancel je
+     * pokriven u tests/Feature/PayPalPaymentTest.php, uz FakePaymentGateway
+     * (problem #7 iz CLAUDE.md je rešen — nema više mrežnog poziva u
+     * konstruktoru kontrolera).
      */
     public function test_paypal_cancel_odbija_neovlascenog_korisnika(): void
     {

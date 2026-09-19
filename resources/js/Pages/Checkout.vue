@@ -187,17 +187,6 @@ const submit = () => {
                                     </div>
                                 </label>
 
-                                <!-- TEST DATA – visible ONLY when PayPal is selected -->
-                                <div v-if="form.payment_method === 'paypal'" class="mt-4 p-4 bg-yellow-50 border border-yellow-400 rounded-lg text-sm">
-                                    <p class="font-semibold text-yellow-800 mb-2">Test PayPal credentials (sandbox):</p>
-                                    <ul class="list-disc pl-5 space-y-1 text-gray-700">
-                                        <li><strong>Email:</strong> sb-ybtyg48467509@personal.example.com</li>
-                                        <li><strong>Password:</strong> T-9kqa1B</li>
-                                        <li><strong>Visa card:</strong> 4111111111111111</li>
-                                        <li><strong>MasterCard:</strong> 5148652529369811</li>
-                                    </ul>
-                                </div>
-
                                 <label class="flex items-start cursor-pointer">
                                     <input
                                         type="radio"
