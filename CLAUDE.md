@@ -85,14 +85,10 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    `/paypal/cancel/{order}`. Rešenje: `app/Policies/OrderPolicy.php::view()`
    (vlasnik preko `user_id`, gost preko `session('guest_order_ids')`,
    upisuje se u `OrderController::store:95-99` samo za `Auth::guest()`).
-   Tri rute dobile `middleware('can:view,order')`. **Izuzetak:**
-   `/paypal/cancel/{order}` ne koristi `can:view,order` jer
-   `PayPalController::cancel()` ne tipizira `Order` parametar (nema
-   implicit route-model binding) — umesto toga poseban middleware
-   `app/Http/Middleware/AuthorizeOrderAccess.php` (alias `order.owner`)
-   ručno učitava i autorizuje. **Kad se reši problem #7 (PayPal iza
-   interfejsa), razmotriti da li `paypal.cancel` može da pređe na
-   standardni `can:view,order` i da se `order.owner` middleware ukloni.**
+   Sve četiri rute koriste standardni `middleware('can:view,order')`
+   (vidi napomenu u tački 7 — `paypal.cancel` je od Faze 0, koraka 4
+   prešao sa posebnog `order.owner` middleware-a na ovaj standardni,
+   pošto je `PayPalController::cancel()` sada tipizira `Order $order`).
    Napomena: Cart (`resources/js/Stores/cart.js`) je isključivo
    frontend/localStorage, nema server-side session tracking — nije mogao
    da se reiskoristi za gost/order ownership, pa je `guest_order_ids`
@@ -102,9 +98,44 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    konstruktor) i prazan `ProductFactory` popravljeni. Dodati helperi:
    `CategoryFactory::active()/inactive()`, `ProductFactory::inactive()/
    outOfStock()`, `UserFactory::admin()`.
-7. `PayPalController::__construct` odmah zove `getAccessToken()` (mrežni
-   poziv) → ne može da se mock-uje. Izdvojiti `PaymentGateway` interfejs.
-8. Sandbox PayPal lozinka je hardkodovana u `Checkout.vue:195`.
+7. ✅ **REŠENO (Faza 0, korak 4)** — `PayPalController::__construct` je
+   ranije odmah zvao `getAccessToken()` (mrežni poziv) → nije mogao da se
+   mock-uje. Rešenje: `app/Contracts/PaymentGateway.php` (interfejs sa
+   `createOrder(Order)` / `captureOrder(string)`), implementacija
+   `app/Services/PayPalGateway.php` (PayPal klijent i `getAccessToken()`
+   se sada lenjo inicijalizuju tek pri prvom stvarnom pozivu, ne u
+   konstruktoru), bind u `app/Providers/AppServiceProvider.php::register()`.
+   `PayPalController` prima `PaymentGateway` kroz DI. U testovima se
+   bind-uje `tests/Doubles/FakePaymentGateway.php` — nema mrežnih poziva.
+   Kao posledica, `PayPalController::cancel()` sada tipizira `Order $order`
+   (implicit route-model binding), pa je `paypal.cancel` ruta prešla sa
+   posebnog `order.owner` middleware-a na standardni `can:view,order`;
+   `app/Http/Middleware/AuthorizeOrderAccess.php` i alias `order.owner` su
+   uklonjeni (više nemaju svrhu — bila je to zaobilaznica baš za ovaj
+   problem). `success()` i `createPayment()` i dalje primaju `$orderId`
+   (int) — nisu menjani van zahtevanog opsega.
+   Testovi: `tests/Feature/PayPalPaymentTest.php`.
+   **✅ REŠENO** — `/paypal/success/{order}` i `/paypal/create-payment/{order}`
+   (routes/web.php) sada takođe imaju `middleware('can:view,order')`, isti
+   obrazac kao ostale order rute. `PayPalController::success()` i
+   `createPayment()` su tipizirani kao `Order $order` (implicit
+   route-model binding, isto kao `cancel()`). Testovi (vlasnik prolazi,
+   tuđi korisnik/gost bez sesije dobija 403, gateway se ne poziva kad
+   autorizacija odbije) u `tests/Feature/PayPalPaymentTest.php`.
+8. ✅ **REŠENO (Faza 0, korak 4)** — sandbox PayPal test podaci (buyer
+   nalog, ne API kredencijal) su bili hardkodovani u `Checkout.vue:190-199`
+   i završavali u javnom JS bundle-u. Uklonjeni iz frontend koda. Za ručno
+   testiranje checkout-a kroz PayPal Sandbox koristiti:
+   - Email: `sb-ybtyg48467509@personal.example.com`
+   - Lozinka: `T-9kqa1B`
+   - Test kartice: Visa `4111111111111111`, MasterCard `5148652529369811`
+
+   Ovo je sandbox **buyer** nalog (ručno logovanje na lažnu PayPal
+   checkout stranicu tokom testiranja) — **nije isto** što i
+   `PAYPAL_SANDBOX_CLIENT_SECRET` (merchant API OAuth secret koji
+   `PayPalGateway` koristi server-side za `getAccessToken()`). Ta dva
+   kredencijala ne treba mešati; `PAYPAL_SANDBOX_CLIENT_SECRET` ne sme
+   nikad stići na frontend.
 9. `@/components` alias vs postojeći `resources/js/Components` — razlika
    samo u velikom slovu. Radi na Windows-u, **puca na Ubuntu runner-u**.
    Razrešiti pre prve shadcn-vue komponente.
