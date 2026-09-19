@@ -9,12 +9,26 @@ class Category extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'slug', 'description', 'is_active'];
+    protected $fillable = ['parent_id', 'position', 'name', 'slug', 'description', 'is_active'];
+
+    protected $casts = [
+        'position' => 'integer',
+    ];
 
     public function products()
     {
         return $this->hasMany(Product::class);
-    } 
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(Category::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Category::class, 'parent_id')->orderBy('position');
+    }
 
     /**
      * Get the category's active status as boolean.
