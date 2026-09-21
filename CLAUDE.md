@@ -46,12 +46,23 @@ Odluke o opsegu (potvrđene):
 - Plaćanja: **PayPal implementiran** (srmklive/paypal, paypal-server-sdk);
   **Stripe NIJE implementiran** — `stripe/stripe-php` je instaliran ali se
   nigde ne koristi, validacija dozvoljava samo `paypal` i `cod`
-- Frontend: Tailwind, FontAwesome ikone (`lucide` je naveden u
-  `components.json` ali **nije instaliran** — dodati ga pre prve shadcn
-  komponente koja ga koristi). shadcn-vue je samo podešen (`components.json`),
-  nijedna komponenta još nije dodata. Aliasi su PascalCase kao i postojeći
-  folder: `@/Components`, `@/Components/ui` (vidi #9); `@/lib`, `@/composables`
-  su lowercase i tek se kreiraju (`resources/js/lib/bookLabels.js` je prvi fajl)
+- Frontend: **Tailwind 3.4** (PostCSS, `@tailwind` direktive — ne v4), postojeća
+  aplikacija koristi FontAwesome ikone. shadcn-vue je samo podešen
+  (`components.json`), nijedna komponenta još nije dodata. Aliasi su PascalCase
+  kao i postojeći folder: `@/Components`, `@/Components/ui` (vidi #9); `@/lib`,
+  `@/composables` su lowercase (`resources/js/lib/`: `bookLabels.js`, `utils.js`).
+- **shadcn-vue ikone (svesna odluka: miks FontAwesome + lucide).**
+  `iconLibrary` u `components.json` ostaje `"lucide"`. Provereno u izolovanom
+  projektu: CLI prihvata bilo koji string, ali vrednost `"fontawesome"` ništa ne
+  menja — generisane komponente (npr. `dialog`) svejedno uvoze
+  `lucide-vue-next`. Iste provere su pokazale da `shadcn-vue add` **ne
+  instalira** `lucide-vue-next` (sa `"lucide"` doda `@lucide/vue`, koji
+  generisani kod ne uvozi) niti kreira `@/lib/utils` — build puca dok se to ne
+  doda. Zato su ovo već instalirano/dodato: `lucide-vue-next`, `clsx`,
+  `tailwind-merge@^2` (v3 je za Tailwind 4) i `resources/js/lib/utils.js`
+  (`cn()`). Kad se doda prva komponenta: ukloniti višak `@lucide/vue` ako ga
+  CLI upiše u `package.json`; nove shadcn komponente koriste lucide, postojeći
+  ekrani ostaju na FontAwesome-u.
 
 ## Autentikacija — koristi postojeći Breeze
 - Projekat ima **Laravel Breeze** sa kompletnim auth tokom (registracija,
@@ -180,7 +191,11 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
 - Rute: `/` i `/shop` (`home`/`shop`) → `CatalogController@index`;
   `/knjiga/{slug}` (`book.show`) → `@show`. Slug je `products.slug`; stare
   `/product/{id}` ruta i `Admin\ProductController::publicIndex/publicShow`
-  su **obrisani** (ID u URL-u više ne postoji). Katalog prikazuje samo
+  su **obrisani** (ID u URL-u više ne postoji; grep celog repo-a — Vue, PHP,
+  blade, testovi — potvrđuje da nijedan link ne generiše `/product/{id}`;
+  Cart čuva samo `{id, name, price, image}`, bez URL-a). Jedini ostatak je
+  `resources/js/ziggy.js` (tracked, generisan, **nigde se ne uvozi** —
+  Ziggy dolazi iz `@routes` u `app.blade.php`), može se obrisati. Katalog prikazuje samo
   aktivne proizvode koji **imaju** `books` red (proizvod bez knjige → 404 /
   nije u listi).
 - Sva logika upita je u `app/Services/BookCatalog.php`: `filters()` (ispravne
