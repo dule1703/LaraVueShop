@@ -3,10 +3,10 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Order;
+use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ProductController;
@@ -17,32 +17,10 @@ use App\Http\Controllers\Admin\PublisherController;
 use App\Http\Controllers\PayPalController;
 use App\Http\Controllers\Api\CartController;
 
-Route::get('/', function () {
-    $categories = \App\Models\Category::with(['products' => function ($query) {
-        $query->where('is_active', true);
-    }])->get();
-    return Inertia::render('Shop', [
-        'categories' => $categories,
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-    ]);
-})->name('home');
-
-// Shop stranica (/shop) – ista logika
-Route::get('/shop', function () {
-    $categories = \App\Models\Category::with(['products' => function ($query) {
-        $query->where('is_active', true);
-    }])->get();
-    return Inertia::render('Shop', [
-        'categories' => $categories,
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-    ]);
-})->name('shop');
+// Javni katalog knjiga (početna i /shop su ista stranica)
+Route::get('/', [CatalogController::class, 'index'])->name('home');
+Route::get('/shop', [CatalogController::class, 'index'])->name('shop');
+Route::get('/knjiga/{slug}', [CatalogController::class, 'show'])->name('book.show');
 
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
@@ -100,9 +78,6 @@ Route::get('/order/cod-success/{order}', function (Order $order) {
 Route::get('/payment/failed/{order}', function (Order $order) {
     return Inertia::render('Orders/PaymentFailed', ['order' => $order]);
 })->middleware('can:view,order')->name('payment.failed');
-
-// Javne rute – bez auth i admin middleware-a
-Route::get('/product/{product}', [ProductController::class, 'publicShow'])->name('product.details');
 
 // Cart stranica - dostupna SVIMA (guest i auth)
 Route::get('/cart', function() {
