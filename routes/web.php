@@ -11,6 +11,9 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\BookController;
+use App\Http\Controllers\Admin\AuthorController;
+use App\Http\Controllers\Admin\PublisherController;
 use App\Http\Controllers\PayPalController;
 use App\Http\Controllers\Api\CartController;
 
@@ -59,6 +62,9 @@ Route::middleware(['auth', 'admin'])
         ->group(function(){
             Route::resource('categories', CategoryController::class);
             Route::resource('products', ProductController::class);
+            Route::resource('books', BookController::class)->except('show');
+            Route::resource('authors', AuthorController::class)->except('show');
+            Route::resource('publishers', PublisherController::class)->except('show');
             Route::resource('orders', OrderController::class)->only([
                 'index', 'show', 'update', 'destroy'
             ]);      

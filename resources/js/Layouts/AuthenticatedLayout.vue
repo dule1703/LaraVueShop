@@ -69,6 +69,15 @@ const cart = useCartStore();
                 <NavLink :href="route('admin.products.index')" :active="route().current('admin.products.*')">
                   Products
                 </NavLink>
+                <NavLink :href="route('admin.books.index')" :active="route().current('admin.books.*')">
+                  Books
+                </NavLink>
+                <NavLink :href="route('admin.authors.index')" :active="route().current('admin.authors.*')">
+                  Authors
+                </NavLink>
+                <NavLink :href="route('admin.publishers.index')" :active="route().current('admin.publishers.*')">
+                  Publishers
+                </NavLink>
                 <NavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
                   Orders
                 </NavLink>
@@ -146,6 +155,15 @@ const cart = useCartStore();
               </ResponsiveNavLink>
               <ResponsiveNavLink :href="route('admin.products.index')" :active="route().current('admin.products.*')">
                 Products
+              </ResponsiveNavLink>
+              <ResponsiveNavLink :href="route('admin.books.index')" :active="route().current('admin.books.*')">
+                Books
+              </ResponsiveNavLink>
+              <ResponsiveNavLink :href="route('admin.authors.index')" :active="route().current('admin.authors.*')">
+                Authors
+              </ResponsiveNavLink>
+              <ResponsiveNavLink :href="route('admin.publishers.index')" :active="route().current('admin.publishers.*')">
+                Publishers
               </ResponsiveNavLink>
               <ResponsiveNavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
                 Orders
