@@ -135,3 +135,23 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    `PAYPAL_SANDBOX_CLIENT_SECRET` ne sme nikad stići na frontend.
 9. `@/components` alias vs postojeći `resources/js/Components` — razlika
    samo u velikom slovu. Radi na Windows-u, **puca na Ubuntu runner-u**.
+
+## Knjige — admin (Faza 2)
+- Knjiga = `products` red (naslov, slug, cena, zaliha, slika, aktivnost) + `books`
+  red (ISBN, izdavač, godina, strane, jezik, pismo, format). Oba se **uvek**
+  upisuju kroz `app/Services/BookService.php` u jednoj `DB::transaction`
+  (zajedno sa autorima). Ne upisivati `Product`/`Book` direktno iz kontrolera.
+- `author_book` se menja isključivo sa `detach()` + `attach()` (po jedan
+  `attach` po redu), **nikad `sync()`**: PK je `(book_id, author_id, role)`, a
+  `sync()` poredi samo po `author_id`, pa ne može da predstavi istog autora sa
+  dve uloge (npr. autor + ilustrator).
+- ISBN: `app/Support/Isbn.php` (normalizacija, checksum ISBN-10/13, konverzija),
+  pravilo `app/Rules/ValidIsbn.php`. U bazi se čuva kanonski `isbn13` (+ `isbn10`
+  kad postoji); unos u formi je jedno polje `isbn`.
+- `products.stock = NULL` (neograničeno) forma dozvoljava samo za format `ebook`.
+  Checkout (`WHERE stock >= :q`) još ne podržava NULL zalihe — pre prodaje
+  e-knjiga to treba rešiti.
+- `php artisan catalog:convert-products-to-books` — ručno, idempotentno
+  prebacivanje proizvoda iz kategorije `knjige` (i potkategorija) u `books`
+  (`--dry-run`, `--language`, `--format`). **Ne ide u deploy pipeline.**
+- Inertia deli `flash.success` / `flash.error` (`HandleInertiaRequests`).
