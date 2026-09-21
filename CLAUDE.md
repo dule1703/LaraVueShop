@@ -7,6 +7,13 @@ konvencije i kontekst koji ne treba svaki put ponovo objašnjavati.
 - Odgovaraj na srpskom jeziku.
 - Za složenije arhitekturne ili bezbednosne odluke koristi extended thinking.
 
+## Radni tok
+- Kad se završi korak/faza, ažuriranje `CLAUDE.md` (nova saznanja, rešeni
+  problemi, otvorene napomene) **MORA** biti deo **ISTOG commit-a** kao i
+  kod — nikad poseban commit/push samo za dokumentaciju. Standardna praksa.
+- Promene idu preko PR-a ka `develop`/`main`; korisnik merge-uje (bez
+  direktnog push-a).
+
 ## Model selection strategija
 - **Haiku** — čitanje fajlova, formatiranje, prosti checks
 - **Sonnet** — svakodnevni kod, YAML, debugging (~80% zadataka) — **default**
@@ -39,8 +46,12 @@ Odluke o opsegu (potvrđene):
 - Plaćanja: **PayPal implementiran** (srmklive/paypal, paypal-server-sdk);
   **Stripe NIJE implementiran** — `stripe/stripe-php` je instaliran ali se
   nigde ne koristi, validacija dozvoljava samo `paypal` i `cod`
-- Frontend: Tailwind, lucide ikone. shadcn-vue je samo podešen
-  (`components.json`), nijedna komponenta još nije dodata
+- Frontend: Tailwind, FontAwesome ikone (`lucide` je naveden u
+  `components.json` ali **nije instaliran** — dodati ga pre prve shadcn
+  komponente koja ga koristi). shadcn-vue je samo podešen (`components.json`),
+  nijedna komponenta još nije dodata. Aliasi su PascalCase kao i postojeći
+  folder: `@/Components`, `@/Components/ui` (vidi #9); `@/lib`, `@/composables`
+  su lowercase i tek se kreiraju (`resources/js/lib/bookLabels.js` je prvi fajl)
 
 ## Autentikacija — koristi postojeći Breeze
 - Projekat ima **Laravel Breeze** sa kompletnim auth tokom (registracija,
@@ -58,7 +69,7 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
 1. ✅ **REŠENO (Faza 0, korak 1)** — admin rute su bile zaštićene samo
    `auth`, bez provere uloge. Rešenje: `app/Http/Middleware/EnsureUserIsAdmin.php`,
    registrovan kao alias `admin` u `bootstrap/app.php`, primenjen kao
-   `['auth', 'admin']` u `routes/web.php:56` (`auth` mora ostati prvi —
+   `['auth', 'admin']` u `routes/web.php:37` (`auth` mora ostati prvi —
    gost dobija redirect na login, ne 403). Pokriveno testovima u
    `tests/Feature/Admin/AdminAccessTest.php` (18 ruta × gost/ne-admin/admin).
 2. ✅ **REŠENO (Faza 0, korak 2)** — server je prihvatao `price`/
@@ -83,7 +94,7 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    `ValidationException::withMessages(['items' => ...])`, korisnik vidi
    tačnu poruku ("Nema dovoljno zaliha za knjigu ... na stanju: X,
    traženo: Y"), ne generičku grešku. Kod nije menjan.
-4. ✅ **REŠENO (Faza 0, korak 3)** — `/checkout` (`routes/web.php:68`)
+4. ✅ **REŠENO (Faza 0, korak 3)** — `/checkout` (`routes/web.php:52`)
    više ne šalje `Order::latest()->first()` kao prop.
 5. ✅ **REŠENO (Faza 0, koraci 3-4)** — IDOR na `/order/success/{order}`,
    `/order/cod-success/{order}`, `/payment/failed/{order}`,
@@ -133,8 +144,17 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    `PAYPAL_SANDBOX_CLIENT_SECRET` (merchant API OAuth secret koji
    `PayPalGateway` koristi server-side). Ne mešati ta dva kredencijala;
    `PAYPAL_SANDBOX_CLIENT_SECRET` ne sme nikad stići na frontend.
-9. `@/components` alias vs postojeći `resources/js/Components` — razlika
-   samo u velikom slovu. Radi na Windows-u, **puca na Ubuntu runner-u**.
+9. ✅ **REŠENO (Faza 3.1)** — `components.json` je imao `@/components` i
+   `@/components/ui` (malo `c`), a folder i svih ~30 importa koriste
+   `Components`. Radi na Windows-u (case-insensitive), puca na Ubuntu-u, a
+   shadcn CLI bi generisao paralelan lowercase folder. Rešenje: aliasi u
+   `components.json` prebačeni na `@/Components` i `@/Components/ui` (folder
+   se **nije** preimenovao; Vite nema eksplicitan `@` alias, dolazi iz
+   `laravel-vite-plugin`). Guard: `tests/Unit/FrontendImportCaseTest.php`
+   proverava svaki `@/...` import i svaki alias iz `components.json` protiv
+   stvarnih imena fajlova (`scandir`, jer `file_exists` na Windows-u laže) —
+   pada na starom `components.json`. Ne uvoditi importe sa drugačijim
+   pisanjem slova.
 
 ## Knjige — admin (Faza 2)
 - Knjiga = `products` red (naslov, slug, cena, zaliha, slika, aktivnost) + `books`
@@ -155,3 +175,41 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   prebacivanje proizvoda iz kategorije `knjige` (i potkategorija) u `books`
   (`--dry-run`, `--language`, `--format`). **Ne ide u deploy pipeline.**
 - Inertia deli `flash.success` / `flash.error` (`HandleInertiaRequests`).
+
+## Katalog — javni prikaz (Faza 3, deo 1)
+- Rute: `/` i `/shop` (`home`/`shop`) → `CatalogController@index`;
+  `/knjiga/{slug}` (`book.show`) → `@show`. Slug je `products.slug`; stare
+  `/product/{id}` ruta i `Admin\ProductController::publicIndex/publicShow`
+  su **obrisani** (ID u URL-u više ne postoji). Katalog prikazuje samo
+  aktivne proizvode koji **imaju** `books` red (proizvod bez knjige → 404 /
+  nije u listi).
+- Sva logika upita je u `app/Services/BookCatalog.php`: `filters()` (ispravne
+  vrednosti prolaze, neispravne se tiho ignorišu umesto 422), `query()`,
+  `paginate()` (`PER_PAGE = 12`, `withQueryString()`), `options()`. Nikad
+  `->get()` cele liste knjiga. Upit ide preko `books` JOIN `products`, sortira
+  po `products.name, books.id` (stabilna paginacija).
+- Filteri (query string, svi opcioni, kombinuju se sa AND): `category` (slug,
+  **uključuje sve potkategorije**), `author` (slug, bilo koja uloga), `publisher`
+  (slug), `language` (`sr`), `script` (`Cyrl`/`Latn`), `format`, `price_min`,
+  `price_max` (inkluzivno), `in_stock=1`. Nepoznat/neaktivan slug daje **0
+  rezultata**, ne „ignoriši filter“. `in_stock` računa `stock IS NULL`
+  (e-knjiga) kao dostupno.
+- Opcije filtera (`options` prop) sadrže samo autore/izdavače/jezike iz
+  aktivnih knjiga i aktivne kategorije kao stablo sa `depth`. Autori i
+  izdavači su obični `<select>` — kad broj pređe par stotina, zameniti
+  pretragom/typeahead-om.
+- Cena stiže kao broj (SQLite) ili string (MariaDB) — frontend uvek koristi
+  `formatPrice()` iz `resources/js/lib/bookLabels.js`, testovi porede
+  numerički. Srpske labele formata/pisma/uloga su u istom fajlu.
+- `Product.vue`: `stock === null` prikazuje „Dostupno“, ali je dugme
+  **onemogućeno** (kao i za `stock = 0`) dok se ne reši NULL zaliha u
+  `OrderController` (Faza 5, vidi Faza 2 gore). Korpa dobija samo
+  `{id, name, price, image}` (`id` = `products.id`); Cart/Pinia store i
+  checkout nisu dirani — refaktor na `{id, quantity}` je sledeći korak.
+- Pretraga teksta (`books.search_text`, ćirilica/latinica) **još nije
+  implementirana**; `search_text` se ne popunjava. Sortiranje po ceni/datumu
+  nije dodato.
+- Testovi: `tests/Feature/Catalog/ShopCatalogTest.php`,
+  `BookDetailTest.php`. Vizuelno provereno u pravom browseru (Chrome headless
+  preko CDP-a, seed na privremenom SQLite-u): filteri, paginacija sa
+  filterima, reset, dodavanje u korpu.
