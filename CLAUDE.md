@@ -193,9 +193,9 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   `/product/{id}` ruta i `Admin\ProductController::publicIndex/publicShow`
   su **obrisani** (ID u URL-u više ne postoji; grep celog repo-a — Vue, PHP,
   blade, testovi — potvrđuje da nijedan link ne generiše `/product/{id}`;
-  Cart čuva samo `{id, name, price, image}`, bez URL-a). Jedini ostatak je
-  `resources/js/ziggy.js` (tracked, generisan, **nigde se ne uvozi** —
-  Ziggy dolazi iz `@routes` u `app.blade.php`), može se obrisati. Katalog prikazuje samo
+  Cart čuva samo `{id, name, price, image}`, bez URL-a). Stari generisani
+  `resources/js/ziggy.js` (nigde uvožen, sadržao je `product.details`) je
+  **obrisan** — Ziggy dolazi iz `@routes` u `app.blade.php`. Katalog prikazuje samo
   aktivne proizvode koji **imaju** `books` red (proizvod bez knjige → 404 /
   nije u listi).
 - Sva logika upita je u `app/Services/BookCatalog.php`: `filters()` (ispravne
