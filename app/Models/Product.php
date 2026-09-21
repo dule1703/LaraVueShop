@@ -25,6 +25,16 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function book()
+    {
+        return $this->hasOne(Book::class);
+    }
+
+    public function stockMovements()
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
     /**
      * Get the product's active status as boolean.
      */
