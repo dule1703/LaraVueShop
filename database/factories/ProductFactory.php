@@ -45,4 +45,14 @@ class ProductFactory extends Factory
             'stock' => 0,
         ]);
     }
+
+    /**
+     * NULL = neograničene zalihe (npr. e-knjiga).
+     */
+    public function unlimitedStock(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'stock' => null,
+        ]);
+    }
 }
