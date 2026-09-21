@@ -85,15 +85,16 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    traženo: Y"), ne generičku grešku. Kod nije menjan.
 4. ✅ **REŠENO (Faza 0, korak 3)** — `/checkout` (`routes/web.php:68`)
    više ne šalje `Order::latest()->first()` kao prop.
-5. ✅ **REŠENO (Faza 0, korak 3)** — IDOR na `/order/success/{order}`,
+5. ✅ **REŠENO (Faza 0, koraci 3-4)** — IDOR na `/order/success/{order}`,
    `/order/cod-success/{order}`, `/payment/failed/{order}`,
    `/paypal/cancel/{order}`. Rešenje: `app/Policies/OrderPolicy.php::view()`
    (vlasnik preko `user_id`, gost preko `session('guest_order_ids')`,
    upisuje se u `OrderController::store:95-99` samo za `Auth::guest()`).
-   Sve četiri rute koriste standardni `middleware('can:view,order')`
-   (vidi napomenu u tački 7 — `paypal.cancel` je od Faze 0, koraka 4
-   prešao sa posebnog `order.owner` middleware-a na ovaj standardni,
-   pošto je `PayPalController::cancel()` sada tipizira `Order $order`).
+   Sve rute (uključujući `paypal.cancel`, nakon što je kontroler
+   tipiziran) koriste standardni `middleware('can:view,order')`. Poseban
+   `AuthorizeOrderAccess`/`order.owner` middleware je bio privremena
+   zaobilaznica dok #7 nije rešen — **obrisan** kad je prestao da bude
+   potreban.
    Napomena: Cart (`resources/js/Stores/cart.js`) je isključivo
    frontend/localStorage, nema server-side session tracking — nije mogao
    da se reiskoristi za gost/order ownership, pa je `guest_order_ids`
@@ -104,33 +105,25 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    `CategoryFactory::active()/inactive()`, `ProductFactory::inactive()/
    outOfStock()`, `UserFactory::admin()`.
 7. ✅ **REŠENO (Faza 0, korak 4)** — `PayPalController::__construct` je
-   ranije odmah zvao `getAccessToken()` (mrežni poziv) → nije mogao da se
-   mock-uje. Rešenje: `app/Contracts/PaymentGateway.php` (interfejs sa
-   `createOrder(Order)` / `captureOrder(string)`), implementacija
-   `app/Services/PayPalGateway.php` (PayPal klijent i `getAccessToken()`
-   se sada lenjo inicijalizuju tek pri prvom stvarnom pozivu, ne u
-   konstruktoru), bind u `app/Providers/AppServiceProvider.php::register()`.
-   `PayPalController` prima `PaymentGateway` kroz DI. U testovima se
-   bind-uje `tests/Doubles/FakePaymentGateway.php` — nema mrežnih poziva.
-   Kao posledica, `PayPalController::cancel()` sada tipizira `Order $order`
-   (implicit route-model binding), pa je `paypal.cancel` ruta prešla sa
-   posebnog `order.owner` middleware-a na standardni `can:view,order`;
-   `app/Http/Middleware/AuthorizeOrderAccess.php` i alias `order.owner` su
-   uklonjeni (više nemaju svrhu — bila je to zaobilaznica baš za ovaj
-   problem). `success()` i `createPayment()` i dalje primaju `$orderId`
-   (int) — nisu menjani van zahtevanog opsega.
-   Testovi: `tests/Feature/PayPalPaymentTest.php`.
-   **✅ REŠENO** — `/paypal/success/{order}` i `/paypal/create-payment/{order}`
-   (routes/web.php) sada takođe imaju `middleware('can:view,order')`, isti
-   obrazac kao ostale order rute. `PayPalController::success()` i
-   `createPayment()` su tipizirani kao `Order $order` (implicit
-   route-model binding, isto kao `cancel()`). Testovi (vlasnik prolazi,
-   tuđi korisnik/gost bez sesije dobija 403, gateway se ne poziva kad
-   autorizacija odbije) u `tests/Feature/PayPalPaymentTest.php`.
-8. ✅ **REŠENO (Faza 0, korak 4)** — sandbox PayPal test podaci (buyer
-   nalog, ne API kredencijal) su bili hardkodovani u `Checkout.vue:190-199`
-   i završavali u javnom JS bundle-u. Uklonjeni iz frontend koda. Za ručno
-   testiranje checkout-a kroz PayPal Sandbox koristiti:
+   zvao `getAccessToken()` (mrežni poziv), nije se mogao mock-ovati.
+   Rešenje: `app/Contracts/PaymentGateway.php` interfejs
+   (`createOrder(Order)` / `captureOrder(string)`), implementacija
+   `app/Services/PayPalGateway.php` sa **lenjom** inicijalizacijom (klijent
+   i `getAccessToken()` tek pri prvom stvarnom pozivu, ne u konstruktoru).
+   Bind u `AppServiceProvider::register()`. Testovi kroz
+   `tests/Doubles/FakePaymentGateway.php` +
+   `tests/Feature/PayPalPaymentTest.php` — bez mrežnih poziva.
+   Kao posledica, `success()` i `createPayment()` (ranije `$orderId` kao
+   int) su takođe tipizirani kao `Order $order` i dobili
+   `middleware('can:view,order')` — zatvara isti IDOR obrazac otkriven
+   usput tokom ovog koraka (vlasnik prolazi, tuđi korisnik/gost bez
+   sesije 403, gateway se ne poziva kad autorizacija odbije).
+8. ✅ **REŠENO (Faza 0, korak 4)** — hardkodovan PayPal sandbox test
+   buyer nalog (email/lozinka za ručno testiranje checkout-a, **ne**
+   `PAYPAL_SANDBOX_CLIENT_SECRET`) je uklonjen iz `Checkout.vue:195` u
+   potpunosti (ne premešten u env), jer testni kredencijali ne treba da
+   postoje u kodu koji vidi krajnji korisnik čak ni iza env uslova.
+   **Test buyer nalog za ručno testiranje (PayPal Sandbox):**
    - Email: `sb-ybtyg48467509@personal.example.com`
    - Lozinka: `T-9kqa1B`
    - Test kartice: Visa `4111111111111111`, MasterCard `5148652529369811`
@@ -138,31 +131,7 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
    Ovo je sandbox **buyer** nalog (ručno logovanje na lažnu PayPal
    checkout stranicu tokom testiranja) — **nije isto** što i
    `PAYPAL_SANDBOX_CLIENT_SECRET` (merchant API OAuth secret koji
-   `PayPalGateway` koristi server-side za `getAccessToken()`). Ta dva
-   kredencijala ne treba mešati; `PAYPAL_SANDBOX_CLIENT_SECRET` ne sme
-   nikad stići na frontend.
+   `PayPalGateway` koristi server-side). Ne mešati ta dva kredencijala;
+   `PAYPAL_SANDBOX_CLIENT_SECRET` ne sme nikad stići na frontend.
 9. `@/components` alias vs postojeći `resources/js/Components` — razlika
    samo u velikom slovu. Radi na Windows-u, **puca na Ubuntu runner-u**.
-   Razrešiti pre prve shadcn-vue komponente.
-
-## Deploy arhitektura (Faze 1-4, potvrđeno radi)
-- Shared cPanel hosting (unlimited.rs), korisnik `ddweba`,
-  `/home/ddweba/projects/laravue-shop/`
-- GitHub repo: `dule1703/LaraVueShop`; `main` → production,
-  `develop` → staging (branch protection + PR tok aktivan)
-- CI/CD: `.github/workflows/deploy.yml` — build na runner-u, tar+ssh
-  transfer (rsync nije dostupan), `finish-release.sh` na serveru:
-  composer install --no-dev, migracije, cache, atomski symlink swap
-- Rollback skripta (workflow_dispatch, bira se release timestamp)
-- Testovi na PHP 8.4 + SQLite `:memory:`, pre deploy-a
-- Email notifikacije o deploy-u (mail.ddwebapps.com)
-- Inode budžet je stvarno ograničenje (ne disk) — `KEEP_RELEASES`
-  production=5, staging=3
-
-## Pravila za migracije i deploy
-- Migracije MORAJU biti aditivne/unazad-kompatibilne (expand/contract) —
-  `rollback.sh` vraća samo kod, ne šemu, pa stariji release mora da radi
-  sa novijom šemom.
-- **Jedna DDL promena po migraciji** — na MariaDB-u DDL nije transakcioni;
-  migracija koja pukne na pola ostavlja bazu delimično migriranu i sledeći
-  deploy puca na "table already exists".
