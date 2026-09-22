@@ -260,3 +260,29 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   ISBN-u i po naslovu+autoru, cena iz CSV-a vs. placeholder fallback, prazna
   polja, više autora/uloga, nevalidni redovi se preskaču bez rušenja ostatka,
   BOM, slug kolizije, `--parent`, `--dry-run`).
+
+## Čišćenje legacy podataka i UI filter (Faza 3, deo 3)
+- Kategorija **"Books"** (slug `books`) **NIJE prazna** — i dalje ima proizvode
+  koji nikad nisu konvertovani u `books` red (otkriveno auditom pre čišćenja),
+  a bar jedan od njih ima `order_items` (stvarne test porudžbine). Zato je
+  **namerno isključena** iz `catalog:cleanup-legacy-categories` — korisnik ih
+  ručno rešava kroz admin.
+- `php artisan catalog:cleanup-legacy-categories` — ručna, idempotentna komanda
+  (isti obrazac kao `catalog:convert-products-to-books`). Podrazumevano cilja
+  `clothes-and-shoes`, `electronics`, `home-appliances` (`--category=slug`,
+  ponovljivo, menja listu; `--dry-run` ne upisuje ništa).
+  - Proizvod bez `order_items`/`stock_movements` → **briše se**.
+  - Proizvod SA `order_items` ili `stock_movements` (FK `restrict`, isti
+    obrazac kao kod knjiga) → **samo se deaktivira** (`is_active = false`),
+    nikad ne briše — istorija porudžbina/zaliha se ne sme izgubiti.
+  - Kategorija se briše samo ako joj ne ostane nijedan proizvod (aktivan ili
+    deaktiviran); inače ostaje, izveštaj komande kaže zašto.
+  - **Ne ide u deploy pipeline** — pokreće se ručno na svakom okruženju
+    posebno (isto pravilo kao ostale `catalog:*` komande).
+  - Testovi: `tests/Feature/Console/CleanupLegacyCategoriesTest.php`.
+- `Shop.vue`: uklonjeno dugme "Primeni". Svi filteri se sada primenjuju
+  automatski — select/checkbox filteri odmah (`@change`), cena
+  (`price_min`/`price_max`) sa debounce-om od 400ms da kucanje ne šalje upit
+  na svaki taster. Filter panel više nije `<form>` element (plain `<div>`),
+  namerno — bez `<form>` Enter u cenovnim poljima nema šta da submit-uje
+  (nema native page reload rizika).
