@@ -33,12 +33,9 @@ onMounted(async () => {
         form.email = page.props.auth.user.email || '';
     }
 
-    // Sinhronizuj korpu
-    if (page.props.auth?.user) {
-        await cart.loadFromBackend();
-    } else {
-        cart.loadFromLocalStorage();
-    }
+    // Sinhronizuj korpu (loadFromBackend interno pada nazad na
+    // loadFromLocalStorage() za gosta - vidi cart.js)
+    await cart.loadFromBackend();
 
     // Sveži naziv/cena/slika sa servera (nikad iz onoga što je korpa sačuvala)
     await cart.hydrate();

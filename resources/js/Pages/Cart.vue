@@ -7,8 +7,15 @@ import { formatPrice } from '@/lib/bookLabels';
 
 const cart = useCartStore();
 
-onMounted(() => {
-  cart.hydrate();
+onMounted(async () => {
+  // MORA prvo load pa tek onda hydrate: hydrate() gleda trenutne cart.items,
+  // a app.js učitava korpu (loadFromBackend/loadFromLocalStorage) TEK POSLE
+  // app.mount()-a, tj. POSLE što se ovaj onMounted već izvršio. Osloniti se
+  // na app.js-ov load bi značilo da hydrate() vidi praznu korpu, ništa ne
+  // fetch-uje, i cena ostane 0,00 € zauvek (ne re-triggeruje se automatski
+  // kad items kasnije stignu). Vidi resources/js/Stores/cart.test.js.
+  await cart.loadFromBackend(); // gost -> interno pada nazad na loadFromLocalStorage()
+  await cart.hydrate();
 });
 
 const increaseQuantity = (productId) => {
