@@ -12,15 +12,25 @@ const props = defineProps({
     options: Object,
 });
 
+const PRICE_DEBOUNCE_MS = 400;
+
 const form = reactive({ ...props.filters });
 const showFilters = ref(false);
+let priceDebounceTimer = null;
 
 // Back/forward i "Poništi filtere" menjaju props bez remount-a komponente.
 watch(() => props.filters, (filters) => Object.assign(form, filters));
 
+watch([() => form.price_min, () => form.price_max], () => {
+    clearTimeout(priceDebounceTimer);
+    priceDebounceTimer = setTimeout(apply, PRICE_DEBOUNCE_MS);
+});
+
 const hasActiveFilters = computed(() => Object.values(props.filters).some((v) => v !== null && v !== false));
 
 function apply() {
+    clearTimeout(priceDebounceTimer);
+
     const params = {};
     for (const [key, value] of Object.entries(form)) {
         if (value === null || value === '' || value === false) continue;
@@ -56,10 +66,9 @@ function categoryLabel(category) {
                 </div>
 
                 <div class="lg:grid lg:grid-cols-4 lg:gap-8">
-                    <form
+                    <div
                         class="mb-8 lg:mb-0 space-y-4 lg:block"
                         :class="showFilters ? 'block' : 'hidden'"
-                        @submit.prevent="apply"
                     >
                         <div>
                             <label for="f-category" class="block text-sm font-medium text-gray-700">Kategorija</label>
@@ -123,15 +132,12 @@ function categoryLabel(category) {
                             Samo na stanju
                         </label>
 
-                        <div class="flex items-center gap-3">
-                            <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
-                                Primeni
-                            </button>
-                            <Link v-if="hasActiveFilters" :href="route('shop')" class="text-sm text-gray-600 underline hover:text-gray-900">
+                        <div v-if="hasActiveFilters" class="flex items-center gap-3">
+                            <Link :href="route('shop')" class="text-sm text-gray-600 underline hover:text-gray-900">
                                 Poništi filtere
                             </Link>
                         </div>
-                    </form>
+                    </div>
 
                     <div class="lg:col-span-3">
                         <div v-if="books.data.length" class="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
