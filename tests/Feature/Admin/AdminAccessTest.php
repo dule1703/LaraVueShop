@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Models\Book;
 use App\Models\Category;
 use App\Models\Order;
 use App\Models\Product;
@@ -23,6 +24,7 @@ class AdminAccessTest extends TestCase
     private Category $category;
     private Product $product;
     private Order $order;
+    private Book $book;
 
     protected function setUp(): void
     {
@@ -31,7 +33,8 @@ class AdminAccessTest extends TestCase
         $this->withoutVite();
 
         $this->category = Category::factory()->active()->create();
-        $this->product = Product::factory()->for($this->category)->create();
+        $this->product = Product::factory()->for($this->category)->create(['stock' => 3]);
+        $this->book = Book::factory()->for($this->product, 'product')->create();
         $this->order = Order::create([
             'first_name' => 'Pera',
             'last_name' => 'Perić',
@@ -68,6 +71,8 @@ class AdminAccessTest extends TestCase
             'orders.show' => ['get', 'admin.orders.show', 'order'],
             'orders.update' => ['put', 'admin.orders.update', 'order'],
             'orders.destroy' => ['delete', 'admin.orders.destroy', 'order'],
+
+            'books.restock' => ['post', 'admin.books.restock', 'book'],
         ];
     }
 
@@ -214,7 +219,8 @@ class AdminAccessTest extends TestCase
         $this->assertDatabaseCount('orders', 1);
 
         $this->assertDatabaseHas('categories', ['id' => $this->category->id, 'name' => $this->category->name]);
-        $this->assertDatabaseHas('products', ['id' => $this->product->id, 'name' => $this->product->name]);
+        $this->assertDatabaseHas('products', ['id' => $this->product->id, 'name' => $this->product->name, 'stock' => 3]);
         $this->assertDatabaseHas('orders', ['id' => $this->order->id, 'status' => 'pending']);
+        $this->assertDatabaseCount('stock_movements', 0);
     }
 }

@@ -41,6 +41,7 @@ Route::middleware(['auth', 'admin'])
             Route::resource('categories', CategoryController::class);
             Route::resource('products', ProductController::class);
             Route::resource('books', BookController::class)->except('show');
+            Route::post('books/{book}/restock', [BookController::class, 'restock'])->name('books.restock');
             Route::resource('authors', AuthorController::class)->except('show');
             Route::resource('publishers', PublisherController::class)->except('show');
             Route::resource('orders', OrderController::class)->only([

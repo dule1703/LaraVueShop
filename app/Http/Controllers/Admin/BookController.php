@@ -10,26 +10,60 @@ use App\Models\Category;
 use App\Models\OrderItem;
 use App\Models\Publisher;
 use App\Services\BookService;
+use App\Services\InventoryService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class BookController extends Controller
 {
-    public function __construct(private BookService $books)
+    private const DEFAULT_LOW_STOCK_THRESHOLD = 5;
+
+    public function __construct(private BookService $books, private InventoryService $inventory)
     {
     }
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $lowStock = $request->boolean('low_stock');
+        $threshold = max(1, (int) $request->input('threshold', self::DEFAULT_LOW_STOCK_THRESHOLD));
+
         $books = Book::query()
             ->select('books.*')
             ->join('products', 'products.id', '=', 'books.product_id')
             ->with(['product:id,name,slug,price,stock,is_active', 'publisher:id,name', 'authors:id,name'])
-            ->orderBy('products.name')
-            ->paginate(20);
+            ->when($lowStock, function ($query) use ($threshold) {
+                // stock IS NULL = neograničena zaliha (e-knjiga) — nikad "niska".
+                $query->whereNotNull('products.stock')->where('products.stock', '<', $threshold);
+            })
+            ->when($lowStock, fn ($query) => $query->orderBy('products.stock'), fn ($query) => $query->orderBy('products.name'))
+            ->paginate(20)
+            ->withQueryString();
 
-        return Inertia::render('Admin/Books/Index', ['books' => $books]);
+        return Inertia::render('Admin/Books/Index', [
+            'books' => $books,
+            'filters' => ['low_stock' => $lowStock, 'threshold' => $threshold],
+        ]);
+    }
+
+    public function restock(Request $request, Book $book): RedirectResponse
+    {
+        $product = $book->product;
+
+        if ($product->stock === null) {
+            return redirect()->route('admin.books.index')
+                ->with('error', 'Ova knjiga ima neograničenu zalihu (e-knjiga) — dopuna nije primenjiva.');
+        }
+
+        $validated = $request->validate([
+            'quantity' => 'required|integer|min:1',
+            'note' => 'nullable|string|max:255',
+        ]);
+
+        $this->inventory->restock($product, $validated['quantity'], $request->user(), $validated['note'] ?? null);
+
+        return redirect()->route('admin.books.index')->with('success', 'Zaliha je dopunjena.');
     }
 
     public function create(): Response
