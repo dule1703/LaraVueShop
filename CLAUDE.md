@@ -248,9 +248,8 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   `OrderController` (Faza 5, vidi Faza 2 gore). Korpa dobija samo
   `{id, name, price, image}` (`id` = `products.id`); Cart/Pinia store i
   checkout nisu dirani — refaktor na `{id, quantity}` je sledeći korak.
-- Pretraga teksta (`books.search_text`, ćirilica/latinica) **još nije
-  implementirana**; `search_text` se ne popunjava. Sortiranje po ceni/datumu
-  nije dodato.
+- Pretraga teksta (`books.search_text`, ćirilica/latinica) — vidi Faza 4
+  niže. Sortiranje po ceni/datumu nije dodato.
 - Testovi: `tests/Feature/Catalog/ShopCatalogTest.php`,
   `BookDetailTest.php`. Vizuelno provereno u pravom browseru (Chrome headless
   preko CDP-a, seed na privremenom SQLite-u): filteri, paginacija sa
@@ -386,3 +385,60 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   (`.github/workflows/deploy.yml`, `tests` job, odmah posle `npm run build`
   — pre `composer test`, tako da JS regresija zaustavi pipeline pre nego što
   se PHP testovi i deploy uopšte pokrenu).
+
+## Pretraga — ćirilica/latinica (Faza 4)
+- `app/Support/SearchText.php::normalize()` — malo slovo + ćirilica
+  preslovljena u latinicu + dijakritika uklonjena (č/ć→c, š→s, ž→z, đ→dj;
+  `dž`/`џ` ispadnu kao `dz` automatski preko `ž→z`, bez posebnog obrasca za
+  dvoslove) + interpunkcija zamenjena razmakom i kolabirana. "Дина" i "Dina"
+  daju isti rezultat. Čist string-mapping (ćirilična tabela + `strtr`), bez
+  ICU/intl ekstenzije.
+- `books.search_text` (kolona je postojala od Faze 1, ali se nije punila) se
+  računa iz naslova (`products.name`), podnaslova, originalnog naslova,
+  izdavača i svih autora (bez obzira na ulogu), preko
+  `app/Support/BookSearchIndexer.php::compute()`.
+- Punjenje ide preko `app/Observers/BookObserver.php` (`Book::saved`) i
+  `app/Observers/ProductObserver.php` (`Product::saved`, odbrambeni sloj —
+  registrovani u `AppServiceProvider::boot()`. Upis u bazu ide preko query
+  buildera (`Book::query()->whereKey()->update()`), ne preko `$book->save()`,
+  da se izbegne rekurzivno okidanje observera.
+  **Autori su poseban slučaj:** menjaju se preko pivot tabele
+  (`BookService::replaceAuthors` — `detach()`/`attach()`), što ne okida
+  `Book`-ov `saved` event. Zato `BookService::create()`/`update()` posle
+  `replaceAuthors()` rade eksplicitni `$book->touch()` da observer preračuna
+  `search_text` i sa finalnim autorima. **Posledica:** ako se autori ikad
+  vežu mimo `BookService` (npr. direktno `$book->authors()->attach()`, kao u
+  nekim starijim testovima), `search_text` se neće osvežiti dok se knjiga
+  ponovo ne sačuva/touch-uje — nije problem u aplikaciji jer je `BookService`
+  jedini put pisanja (vidi Faza 2), ali treba imati na umu u testovima.
+- `php artisan catalog:reindex-search-text` — ručna, idempotentna komanda
+  (isti obrazac kao ostale `catalog:*`), **ne ide u deploy pipeline**.
+  Backfill za knjige upisane pre Faze 4 (svih 44 uvezenih), ali bezbedno da
+  se pokrene bilo kada (preskače knjige čiji je `search_text` već tačan).
+  `--dry-run` samo ispisuje šta bi se promenilo.
+- Pretraga: `BookCatalog` dobija filter `search` (nova stavka u
+  `FILTER_KEYS`), normalizuje upit istim `SearchText::normalize()` i radi
+  prost `WHERE books.search_text LIKE '%...%'` (vrednost/`%`/`_` escapovani).
+  Namerno **ne** `whereFullText()`/`fullText()` — ne radi na SQLite, ponaša
+  se drugačije na MariaDB (već zabranjeno ranije u ovom fajlu). Prazan ili
+  samo-razmaci upit se tiho ignoriše (ceo katalog, paginirano), kombinuje se
+  sa ostalim filterima kao AND (isti obrazac kao ostali filteri u Faza 3).
+- `Shop.vue`: novo pretraga polje (`form.search`) iznad filter panela,
+  debounce 400ms (deli isti tajmer sa cenom) + `@keyup.enter` za trenutnu
+  pretragu. Ne zahteva `<form>` (isti razlog kao cena — vidi Faza 3, deo 3).
+- Testovi: `tests/Unit/SearchTextTest.php` (normalizacija — ćirilica/latinica
+  isti rezultat, dijakritika, interpunkcija, null/prazan string),
+  `tests/Feature/Catalog/BookSearchIndexTest.php` (create/update preko
+  `BookService` popunjava i osvežava `search_text`),
+  `tests/Feature/Console/ReindexSearchTextTest.php` (backfill, `--dry-run`,
+  idempotentnost), `tests/Feature/Catalog/ShopCatalogTest.php` (pretraga na
+  ćirilici pronalazi knjigu unetu na latinici i obrnuto, dijakritika/velika
+  slova, prazan upit vraća sve, upit bez rezultata ne baca grešku,
+  kombinovanje sa drugim filterima). Dve postojeće `BookModelTest` provere
+  su ažurirane — `search_text` više nije `NULL` posle create-a (observer ga
+  odmah popuni), pa testovi sad proveravaju da je popunjen i da mass-assign
+  pokušaj (`fill(['search_text' => ...])`) ne prođe, umesto da provere `NULL`.
+  Ručno provereno na realnoj dev bazi (44 uvezenih knjiga, `php artisan
+  serve` + Inertia JSON odgovor): pretraga na ćirilici (`Андрић`, `Дервиш`)
+  i latinici (`seobe`, `crnjanski`) vraća očekivane naslove; `npx vite build`
+  prolazi bez grešaka.

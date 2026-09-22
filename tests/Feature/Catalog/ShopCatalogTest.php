@@ -308,6 +308,74 @@ class ShopCatalogTest extends TestCase
             ->where('options.formats', Book::FORMATS));
     }
 
+    public function test_pretraga_na_cirilici_pronalazi_knjigu_unetu_na_latinici(): void
+    {
+        $book = $this->makeBook(['name' => 'Na Drini ćuprija']);
+        $book->authors()->attach(Author::factory()->create(['name' => 'Ivo Andrić'])->id, ['role' => 'author', 'position' => 0]);
+        $book->touch(); // BookService radi ovo posle attach()-a; attach() sam ne okida observer
+        $this->makeBook(['name' => 'Druga knjiga']);
+
+        $this->assertSame(['Na Drini ćuprija'], $this->titles($this->shop(['search' => 'ћуприја'])));
+        $this->assertSame(['Na Drini ćuprija'], $this->titles($this->shop(['search' => 'Андрић'])));
+    }
+
+    public function test_pretraga_na_latinici_pronalazi_knjigu_unetu_na_cirilici(): void
+    {
+        $book = $this->makeBook(['name' => 'Сеобе'], ['script' => 'Cyrl']);
+        $book->authors()->attach(Author::factory()->create(['name' => 'Милош Црњански'])->id, ['role' => 'author', 'position' => 0]);
+        $book->touch(); // BookService radi ovo posle attach()-a; attach() sam ne okida observer
+        $this->makeBook(['name' => 'Nepovezana knjiga']);
+
+        $this->assertSame(['Сеобе'], $this->titles($this->shop(['search' => 'seobe'])));
+        $this->assertSame(['Сеобе'], $this->titles($this->shop(['search' => 'crnjanski'])));
+    }
+
+    public function test_pretraga_ignorise_dijakritiku_i_velicinu_slova(): void
+    {
+        $this->makeBook(['name' => 'Četiri godišnja doba']);
+        $this->makeBook(['name' => 'Druga knjiga']);
+
+        $this->assertSame(['Četiri godišnja doba'], $this->titles($this->shop(['search' => 'cetiri GODISNJA doba'])));
+    }
+
+    public function test_pretraga_po_izdavacu(): void
+    {
+        $vulkan = Publisher::factory()->create(['name' => 'Vulkan izdavaštvo']);
+        $this->makeBook(['name' => 'Kod Vulkana'], [], $vulkan);
+        $this->makeBook(['name' => 'Bez veze']);
+
+        $this->assertSame(['Kod Vulkana'], $this->titles($this->shop(['search' => 'vulkan'])));
+    }
+
+    public function test_prazan_upit_vraca_ceo_katalog_paginirano(): void
+    {
+        foreach (range(1, 3) as $i) {
+            $this->makeBook(['name' => "Knjiga {$i}"]);
+        }
+
+        $this->assertCount(3, $this->titles($this->shop(['search' => ''])));
+        $this->assertCount(3, $this->titles($this->shop(['search' => '   '])));
+    }
+
+    public function test_pretraga_bez_rezultata_ne_baca_gresku(): void
+    {
+        $this->makeBook(['name' => 'Postojeća knjiga']);
+
+        $response = $this->shop(['search' => 'nesto sto sigurno ne postoji xyz']);
+
+        $this->assertSame([], $this->titles($response));
+        $response->assertInertia(fn (Assert $page) => $page->where('books.total', 0));
+    }
+
+    public function test_pretraga_se_kombinuje_sa_ostalim_filterima(): void
+    {
+        $romani = Category::factory()->active()->create(['slug' => 'romani']);
+        $this->makeBook(['name' => 'Prokleta avlija', 'category_id' => $romani->id]);
+        $this->makeBook(['name' => 'Prokleta sudbina']);
+
+        $this->assertSame(['Prokleta avlija'], $this->titles($this->shop(['search' => 'prokleta', 'category' => 'romani'])));
+    }
+
     public function test_opcije_kategorija_su_stablo_sa_dubinom_i_bez_neaktivnih(): void
     {
         $romani = Category::factory()->active()->create(['name' => 'Romani', 'slug' => 'romani', 'position' => 1]);
