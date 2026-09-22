@@ -228,3 +228,35 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   `BookDetailTest.php`. Vizuelno provereno u pravom browseru (Chrome headless
   preko CDP-a, seed na privremenom SQLite-u): filteri, paginacija sa
   filterima, reset, dodavanje u korpu.
+
+## Uvoz knjiga — CSV (Faza 3, deo 2)
+- `php artisan catalog:import-books {csv}` — idempotentna komanda, ručno
+  pokretanje, **ne ide u deploy pipeline**. Za svaki red kreira `Product` +
+  `Book` (+ autori) isključivo kroz `BookService::create` (jedna transakcija
+  po redu; loš red se preskoči, ostali se uvoze).
+- CSV kolone: `title, subtitle, authors, publisher, isbn13, isbn10,
+  published_year, pages, language, script, format, category, description,
+  price`. `authors` je `"Ime Prezime:role"` spojeno sa `;` (npr.
+  `Ime:author;Ime2:illustrator`); `price` je opciona — red bez cene dobija
+  placeholder 999 EUR i komanda to prijavi po redu i sumarno na kraju.
+  Prazna polja ostaju `NULL`, nikad prazan string.
+- Zaliha je uvek placeholder 10 (CSV ne nosi taj podatak). Knjige se uvoze sa
+  `is_active = true` odmah — **svesna odluka** (vežbovni projekat, ne prava
+  produkcija; ne meša se sa Faza 0 pravilima za produkcioni kod).
+- Kategorije/autori/izdavači: `findOrCreate` po slugu, postojeći se ne diraju.
+  `--parent=<slug>` stavlja *nove* kategorije pod postojećeg roditelja
+  (podrazumevano: bez roditelja, top-level).
+- Duplikati: prvo po ISBN-u (`isbn13`); kad ISBN ne postoji ni na jednoj
+  strani, po naslovu + autoru. Isti naslov sa različitim ISBN-om (drugo
+  izdanje) tretira se kao druga knjiga.
+- **Otvoreno pitanje pre sledećeg uvoza/Faze 4:** prva partija (44 knjige) je
+  uvezena bez `--parent`, pa su nastale 7 novih *top-level* kategorija
+  (`klasici-srpske-knjizevnosti`, `kratke-price`, `savremena-srpska-proza`,
+  `krimitriler`, `poezija`, `knjige-za-decu-i-mlade`, `drama`) kao braća i
+  sestre postojećoj top-level kategoriji `books`, ne kao njena deca. Treba
+  odlučiti da li ih premestiti pod `books` (`parent_id`) pre nego što se
+  katalog/navigacija oslanjaju na postojeće stablo kategorija.
+- Testovi: `tests/Feature/Console/ImportBooksTest.php` (idempotentnost po
+  ISBN-u i po naslovu+autoru, cena iz CSV-a vs. placeholder fallback, prazna
+  polja, više autora/uloga, nevalidni redovi se preskaču bez rušenja ostatka,
+  BOM, slug kolizije, `--parent`, `--dry-run`).
