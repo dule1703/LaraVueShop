@@ -1,14 +1,18 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import DeleteConfirmation from '@/Components/DeleteConfirmation.vue';
+import RestockForm from '@/Components/Admin/RestockForm.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 
 const page = usePage();
 
-defineProps({
+const props = defineProps({
     books: Object,
+    filters: Object,
 });
+
+const isLowStock = (book) => book.product.stock !== null && book.product.stock < props.filters.threshold;
 </script>
 
 <template>
@@ -28,9 +32,19 @@ defineProps({
 
                         <h1 class="text-2xl font-bold mb-6">Knjige</h1>
 
-                        <Link :href="route('admin.books.create')" class="mb-4 inline-block px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
-                            Dodaj knjigu
-                        </Link>
+                        <div class="flex items-center justify-between mb-4">
+                            <Link :href="route('admin.books.create')" class="inline-block px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+                                Dodaj knjigu
+                            </Link>
+
+                            <Link
+                                :href="route('admin.books.index', filters.low_stock ? {} : { low_stock: 1 })"
+                                class="inline-block px-4 py-2 rounded border"
+                                :class="filters.low_stock ? 'bg-amber-100 border-amber-400 text-amber-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'"
+                            >
+                                {{ filters.low_stock ? `Niska zaliha (< ${filters.threshold}) — prikaži sve` : `Prikaži nisku zalihu (< ${filters.threshold})` }}
+                            </Link>
+                        </div>
 
                         <div class="mt-6 overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
@@ -46,14 +60,16 @@ defineProps({
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="book in books.data" :key="book.id">
+                                    <tr v-for="book in books.data" :key="book.id" :class="{ 'bg-amber-50': isLowStock(book) }">
                                         <td class="px-6 py-4">{{ book.product.name }}</td>
                                         <td class="px-6 py-4 text-sm text-gray-500">
                                             {{ book.authors.map((a) => a.name).join(', ') }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ book.isbn13 }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap">€{{ book.product.price }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ book.product.stock ?? '∞' }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap" :class="{ 'text-amber-700 font-semibold': isLowStock(book) }">
+                                            {{ book.product.stock ?? '∞' }}
+                                        </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <span :class="book.product.is_active ? 'text-green-600' : 'text-red-600'">
                                                 {{ book.product.is_active ? 'Aktivna' : 'Neaktivna' }}
@@ -63,6 +79,13 @@ defineProps({
                                             <Link :href="route('admin.books.edit', book.id)" class="text-indigo-600 hover:text-indigo-900 mr-4">
                                                 Izmeni
                                             </Link>
+                                            <span v-if="book.product.stock !== null" class="mr-4">
+                                                <RestockForm
+                                                    :book-id="book.id"
+                                                    :book-name="book.product.name"
+                                                    :restock-url="route('admin.books.restock', book.id)"
+                                                />
+                                            </span>
                                             <DeleteConfirmation
                                                 :item-name="book.product.name"
                                                 item-type="book"
