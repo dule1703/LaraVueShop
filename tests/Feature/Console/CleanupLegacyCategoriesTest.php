@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\StockMovement;
+use App\Services\BookCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -58,7 +59,7 @@ class CleanupLegacyCategoriesTest extends TestCase
         $this->artisan('catalog:cleanup-legacy-categories')->assertSuccessful();
 
         $this->assertDatabaseHas('products', ['id' => $product->id, 'is_active' => false]);
-        $this->assertDatabaseHas('categories', ['id' => $category->id]);
+        $this->assertDatabaseHas('categories', ['id' => $category->id, 'is_active' => false]);
     }
 
     public function test_deaktivira_umesto_brisanja_kad_postoji_stock_movement(): void
@@ -70,7 +71,20 @@ class CleanupLegacyCategoriesTest extends TestCase
         $this->artisan('catalog:cleanup-legacy-categories')->assertSuccessful();
 
         $this->assertDatabaseHas('products', ['id' => $product->id, 'is_active' => false]);
-        $this->assertDatabaseHas('categories', ['id' => $category->id]);
+        $this->assertDatabaseHas('categories', ['id' => $category->id, 'is_active' => false]);
+    }
+
+    public function test_deaktivirana_kategorija_se_ne_prikazuje_u_katalog_filterima(): void
+    {
+        $category = Category::factory()->active()->create(['name' => 'Electronics', 'slug' => 'electronics']);
+        $product = Product::factory()->for($category)->create();
+        $this->makeOrderFor($product);
+
+        $this->assertContains($category->slug, collect((new BookCatalog)->options()['categories'])->pluck('slug'));
+
+        $this->artisan('catalog:cleanup-legacy-categories')->assertSuccessful();
+
+        $this->assertNotContains($category->slug, collect((new BookCatalog)->options()['categories'])->pluck('slug'));
     }
 
     public function test_ne_dira_proizvode_van_ciljanih_kategorija(): void
@@ -92,12 +106,12 @@ class CleanupLegacyCategoriesTest extends TestCase
         $this->makeOrderFor($toDeactivate);
 
         $this->artisan('catalog:cleanup-legacy-categories', ['--dry-run' => true])
-            ->expectsOutputToContain('Obrisalo bi se: 1 proizvod(a), deaktiviralo: 1 proizvod(a)')
+            ->expectsOutputToContain('Obrisalo bi se: 1 proizvod(a) i 0 kategorija; deaktiviralo: 1 proizvod(a) i 1 kategorija')
             ->assertSuccessful();
 
         $this->assertDatabaseHas('products', ['id' => $toDelete->id]);
         $this->assertDatabaseHas('products', ['id' => $toDeactivate->id, 'is_active' => true]);
-        $this->assertDatabaseHas('categories', ['id' => $category->id]);
+        $this->assertDatabaseHas('categories', ['id' => $category->id, 'is_active' => true]);
     }
 
     public function test_hard_delete_je_blokiran_kad_ima_order_items_bez_pada_komande(): void
@@ -122,12 +136,12 @@ class CleanupLegacyCategoriesTest extends TestCase
         $this->artisan('catalog:cleanup-legacy-categories')->assertSuccessful();
         $this->assertDatabaseMissing('products', ['id' => $deletable->id]);
         $this->assertDatabaseHas('products', ['id' => $keepable->id, 'is_active' => false]);
-        $this->assertDatabaseHas('categories', ['id' => $category->id]);
+        $this->assertDatabaseHas('categories', ['id' => $category->id, 'is_active' => false]);
 
         // Drugo pokretanje ne sme da napravi štetu niti da baci grešku.
         $this->artisan('catalog:cleanup-legacy-categories')->assertSuccessful();
         $this->assertDatabaseHas('products', ['id' => $keepable->id, 'is_active' => false]);
-        $this->assertDatabaseHas('categories', ['id' => $category->id]);
+        $this->assertDatabaseHas('categories', ['id' => $category->id, 'is_active' => false]);
         $this->assertDatabaseCount('products', 1);
     }
 

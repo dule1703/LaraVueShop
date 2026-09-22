@@ -276,10 +276,17 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
     obrazac kao kod knjiga) → **samo se deaktivira** (`is_active = false`),
     nikad ne briše — istorija porudžbina/zaliha se ne sme izgubiti.
   - Kategorija se briše samo ako joj ne ostane nijedan proizvod (aktivan ili
-    deaktiviran); inače ostaje, izveštaj komande kaže zašto.
+    deaktiviran); ako joj ostane, **kategorija se takođe deaktivira**
+    (`is_active = false`), ne samo proizvodi. Bitno: `BookCatalog::
+    categoryOptions()` filtrira dropdown filtera isključivo po
+    `Category.is_active`, bez provere da li kategorija ima ijedan
+    aktivan proizvod/knjigu — bez ove deaktivacije bi prazna legacy
+    kategorija ostala vidljiva u filteru i posle čišćenja proizvoda.
   - **Ne ide u deploy pipeline** — pokreće se ručno na svakom okruženju
     posebno (isto pravilo kao ostale `catalog:*` komande).
-  - Testovi: `tests/Feature/Console/CleanupLegacyCategoriesTest.php`.
+  - Testovi: `tests/Feature/Console/CleanupLegacyCategoriesTest.php`
+    (uključuje proveru da deaktivirana kategorija nestane iz
+    `BookCatalog::options()`).
 - `Shop.vue`: uklonjeno dugme "Primeni". Svi filteri se sada primenjuju
   automatski — select/checkbox filteri odmah (`@change`), cena
   (`price_min`/`price_max`) sa debounce-om od 400ms da kucanje ne šalje upit
