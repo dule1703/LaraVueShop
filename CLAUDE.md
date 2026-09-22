@@ -397,12 +397,27 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   računa iz naslova (`products.name`), podnaslova, originalnog naslova,
   izdavača i svih autora (bez obzira na ulogu), preko
   `app/Support/BookSearchIndexer.php::compute()`.
-- Punjenje ide preko `app/Observers/BookObserver.php` (`Book::saved`) i
-  `app/Observers/ProductObserver.php` (`Product::saved`, odbrambeni sloj —
-  registrovani u `AppServiceProvider::boot()`. Upis u bazu ide preko query
-  buildera (`Book::query()->whereKey()->update()`), ne preko `$book->save()`,
-  da se izbegne rekurzivno okidanje observera.
-  **Autori su poseban slučaj:** menjaju se preko pivot tabele
+- Punjenje ide preko četiri observera, registrovana u
+  `AppServiceProvider::boot()`:
+  - `app/Observers/BookObserver.php` (`Book::saved`) — glavni, računa i
+    upisuje `search_text` za tu knjigu.
+  - `app/Observers/ProductObserver.php` (`Product::saved`) — odbrambeni
+    sloj za slučaj da se `Product` ikad sačuva mimo `BookService`-a.
+  - `app/Observers/AuthorObserver.php` / `PublisherObserver.php`
+    (`saved`) — kad se **promeni ime/slug autora ili izdavača**, prolaze
+    kroz `$author->books()` / `$publisher->books()` sa `chunkById(100, ...)`
+    i rade `$book->touch()` po knjizi, što okida `BookObserver` da
+    preračuna `search_text` te knjige. `chunkById` bez `select()`-a —
+    učitava **pun red** (svaki batch od 100), namerno: raniji pokušaj sa
+    `select('books.id')` je bio bag — `BookSearchIndexer` čita
+    `product_id`/`publisher_id`/`subtitle`/`original_title` direktno sa
+    `Book` instance, pa bi ograničen select ostavio te kolone `NULL` i
+    obrisao ih iz `search_text`-a posle `touch()`-a (uhvaćeno testom, vidi
+    ispod). `chunkById` sprečava da se sve knjige (izuzetno) plodnog
+    autora učitaju odjednom u memoriju.
+  Upis u bazu ide preko query buildera (`Book::query()->whereKey()->update()`),
+  ne preko `$book->save()`, da se izbegne rekurzivno okidanje observera.
+  **Autori na knjizi su poseban slučaj:** menjaju se preko pivot tabele
   (`BookService::replaceAuthors` — `detach()`/`attach()`), što ne okida
   `Book`-ov `saved` event. Zato `BookService::create()`/`update()` posle
   `replaceAuthors()` rade eksplicitni `$book->touch()` da observer preračuna
@@ -429,7 +444,11 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
 - Testovi: `tests/Unit/SearchTextTest.php` (normalizacija — ćirilica/latinica
   isti rezultat, dijakritika, interpunkcija, null/prazan string),
   `tests/Feature/Catalog/BookSearchIndexTest.php` (create/update preko
-  `BookService` popunjava i osvežava `search_text`),
+  `BookService` popunjava i osvežava `search_text`; izmena imena autora ili
+  naziva izdavača osvežava `search_text` svih njegovih knjiga bez ručnog
+  reindex-a, uključujući regresioni test sa 120 knjiga jednog autora —
+  preko granice `chunkById(100)` — i test da se naslov/podnaslov ne izgube
+  posle takve izmene),
   `tests/Feature/Console/ReindexSearchTextTest.php` (backfill, `--dry-run`,
   idempotentnost), `tests/Feature/Catalog/ShopCatalogTest.php` (pretraga na
   ćirilici pronalazi knjigu unetu na latinici i obrnuto, dijakritika/velika
