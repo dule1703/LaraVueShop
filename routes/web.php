@@ -84,8 +84,12 @@ Route::get('/cart', function() {
     return Inertia::render('Cart');
 })->name('cart');
 
+// Sveži podaci o proizvodima iz korpe (naziv/cena/slika) - dostupno i gostu,
+// jer Cart stranica ne zahteva auth. Cena/naziv se NIKAD ne čuvaju u samoj korpi.
+Route::get('/api/cart/products', [CartController::class, 'productDetails'])->name('api.cart.products');
+
 // ============================================================================
-// CART API RUTE - SAMO ZA ULOGOVANE KORISNIKE
+// CART API RUTE - SAMO ZA ULOGOVANE KORISNIKE (perzistencija {product_id, quantity})
 // ============================================================================
 Route::middleware('auth')->prefix('api')->group(function () {
     Route::get('/cart', [CartController::class, 'show'])->name('api.cart.show');

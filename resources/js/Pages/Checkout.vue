@@ -5,6 +5,7 @@ import { useForm } from '@inertiajs/vue3';
 import { useCartStore } from '@/Stores/cart';
 import { ref, computed, onMounted } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { formatPrice } from '@/lib/bookLabels';
 
 const page = usePage();
 const cart = useCartStore();
@@ -25,7 +26,7 @@ const form = useForm({
 });
 
 // Fill form if user is logged in
-onMounted(() => {
+onMounted(async () => {
     if (page.props.auth?.user) {
         form.first_name = page.props.auth.user.first_name || '';
         form.last_name  = page.props.auth.user.last_name  || '';
@@ -34,13 +35,16 @@ onMounted(() => {
 
     // Sinhronizuj korpu
     if (page.props.auth?.user) {
-        cart.loadFromBackend();
+        await cart.loadFromBackend();
     } else {
         cart.loadFromLocalStorage();
     }
 
-    // Sinhronizuj korpu sa formom
-    form.items = cart.items;
+    // Sveži naziv/cena/slika sa servera (nikad iz onoga što je korpa sačuvala)
+    await cart.hydrate();
+
+    // Backend očekuje items.*.id (products.id) i items.*.quantity
+    form.items = cart.items.map((item) => ({ id: item.product_id, quantity: item.quantity }));
     form.total_price = cart.totalAmount;
 });
 
@@ -60,15 +64,9 @@ const isFormValid = computed(() => {
 });
 
 const submit = () => {
-    // Sinhronizuj korpu pre slanja
-    form.items = cart.items;
+    // Sinhronizuj korpu pre slanja (backend očekuje items.*.id, ne product_id)
+    form.items = cart.items.map((item) => ({ id: item.product_id, quantity: item.quantity }));
     form.total_price = cart.totalAmount;
-
-    console.log('📦 Submitting order:', {
-        payment_method: form.payment_method,
-        items_count: form.items.length,
-        total: form.total_price
-    });
 
     // ✅ Jednostavno submit - OrderController će raditi redirect
     form.post(route('orders.store'), {
@@ -105,21 +103,31 @@ const submit = () => {
                                 Your cart is empty
                             </div>
                             <div v-else class="border rounded-lg overflow-hidden">
-                                <div v-for="item in cart.items" :key="item.id" class="flex items-center justify-between p-4 border-b last:border-b-0">
+                                <div
+                                    v-for="item in cart.items"
+                                    :key="item.product_id"
+                                    class="flex items-center justify-between p-4 border-b last:border-b-0"
+                                >
                                     <div class="flex items-center gap-4">
-                                        <img v-if="item.image" :src="item.image" class="w-16 h-16 object-cover rounded" />
+                                        <img
+                                            v-if="cart.productDetails[item.product_id]?.image"
+                                            :src="cart.productDetails[item.product_id].image"
+                                            class="w-16 h-16 object-cover rounded"
+                                        />
                                         <div>
-                                            <h3 class="font-medium">{{ item.name }}</h3>
-                                            <p class="text-sm text-gray-600">{{ Number(item.price).toFixed(2) }} € × {{ item.quantity }}</p>
+                                            <h3 class="font-medium">{{ cart.productDetails[item.product_id]?.name }}</h3>
+                                            <p class="text-sm text-gray-600">
+                                                {{ formatPrice(cart.productDetails[item.product_id]?.price ?? 0) }} × {{ item.quantity }}
+                                            </p>
                                         </div>
                                     </div>
                                     <div class="text-right font-medium">
-                                        {{ (item.price * item.quantity).toFixed(2) }} €
+                                        {{ formatPrice((cart.productDetails[item.product_id]?.price ?? 0) * item.quantity) }}
                                     </div>
                                 </div>
                                 <div class="p-6 bg-gray-50 flex justify-between text-xl font-bold">
                                     <span>Total:</span>
-                                    <span class="text-blue-700">{{ totalPrice.toFixed(2) }} €</span>
+                                    <span class="text-blue-700">{{ formatPrice(totalPrice) }}</span>
                                 </div>
                             </div>
                         </div>

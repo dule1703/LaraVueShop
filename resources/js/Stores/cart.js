@@ -2,44 +2,68 @@ import { defineStore } from 'pinia';
 import axios from 'axios';
 import { useAuthStore } from '@/Stores/auth';
 
+/**
+ * Korpa čuva SAMO {product_id, quantity} - nikad cenu/naziv/sliku.
+ * Prihvata i staru šemu ({id, name, price, quantity, ...}) iz localStorage-a/baze
+ * radi glatkog prelaza za korpe sačuvane pre refaktora.
+ */
+function normalizeItems(rawItems) {
+  if (!Array.isArray(rawItems)) return [];
+
+  const merged = new Map();
+  rawItems.forEach((item) => {
+    const productId = item?.product_id ?? item?.id;
+    const quantity = Number(item?.quantity) || 0;
+    if (productId == null || quantity <= 0) return;
+
+    const existing = merged.get(productId) || 0;
+    merged.set(productId, existing + quantity);
+  });
+
+  return Array.from(merged, ([product_id, quantity]) => ({ product_id, quantity }));
+}
+
 export const useCartStore = defineStore('cart', {
   state: () => ({
     items: [],
+    // Sveži podaci o proizvodima (naziv/cena/slika/zalihe), keširano po product_id.
+    // Popunjava se isključivo preko hydrate() - nikad iz onoga što je korpa sačuvala.
+    productDetails: {},
     isLoading: false,
   }),
-  
+
   getters: {
     totalAmount: (state) => {
       if (!Array.isArray(state.items)) return 0;
       return state.items.reduce((sum, item) => {
-        return sum + (item.price || 0) * (item.quantity || 0);
+        const details = state.productDetails[item.product_id];
+        const price = details ? Number(details.price) || 0 : 0;
+        return sum + price * (item.quantity || 0);
       }, 0);
     },
-    
+
     itemCount: (state) => {
       if (!Array.isArray(state.items)) return 0;
       return state.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
     },
-    
+
     isEmpty: (state) => !Array.isArray(state.items) || state.items.length === 0,
   },
-  
+
   actions: {
     /**
-     * Dodaj proizvod u korpu
+     * Dodaj proizvod u korpu (po product_id).
      */
-    addItem(product, qty = 1) {
+    addItem(productId, qty = 1) {
       if (!Array.isArray(this.items)) this.items = [];
-      
-      const existing = this.items.find(i => i.id === product.id);
+
+      const existing = this.items.find((i) => i.product_id === productId);
       if (existing) {
         existing.quantity = (existing.quantity || 0) + qty;
       } else {
-        this.items.push({ ...product, quantity: qty });
+        this.items.push({ product_id: productId, quantity: qty });
       }
-      
-      console.log('➕ Dodato u korpu:', product.name, '| Ukupno stavki:', this.items.length);
-      
+
       this.saveToLocalStorage();
       this.syncWithBackend();
     },
@@ -49,17 +73,17 @@ export const useCartStore = defineStore('cart', {
      */
     decreaseQuantity(productId) {
       if (!Array.isArray(this.items)) this.items = [];
-      
-      const item = this.items.find(i => i.id === productId);
+
+      const item = this.items.find((i) => i.product_id === productId);
       if (!item) return;
-      
+
       if (item.quantity > 1) {
         item.quantity -= 1;
       } else {
         this.removeItem(productId);
         return;
       }
-      
+
       this.saveToLocalStorage();
       this.syncWithBackend();
     },
@@ -69,10 +93,8 @@ export const useCartStore = defineStore('cart', {
      */
     removeItem(productId) {
       if (!Array.isArray(this.items)) this.items = [];
-      this.items = this.items.filter(i => i.id !== productId);
-      
-      console.log('🗑️ Uklonjeno iz korpe | Preostalo stavki:', this.items.length);
-      
+      this.items = this.items.filter((i) => i.product_id !== productId);
+
       this.saveToLocalStorage();
       this.syncWithBackend();
     },
@@ -81,14 +103,51 @@ export const useCartStore = defineStore('cart', {
      * Očisti celu korpu
      */
     clearCart() {
-        this.items = [];
-        this.saveToLocalStorage();
-        
-        const authStore = useAuthStore();
-        if (authStore.user) {
-            console.log('Clearing cart on backend...');
-            this.syncWithBackend();  
+      this.items = [];
+      this.productDetails = {};
+      this.saveToLocalStorage();
+
+      const authStore = useAuthStore();
+      if (authStore.user) {
+        this.syncWithBackend();
+      }
+    },
+
+    /**
+     * Učitaj sveže podatke (naziv/cena/slika/zalihe) za proizvode iz korpe.
+     * Stavke čiji proizvod više ne postoji ili nije aktivan se tiho uklone
+     * iz korpe (graceful - ne ruši prikaz ni checkout).
+     */
+    async hydrate() {
+      if (!Array.isArray(this.items) || this.items.length === 0) {
+        this.productDetails = {};
+        return;
+      }
+
+      const ids = [...new Set(this.items.map((i) => i.product_id))];
+      this.isLoading = true;
+
+      try {
+        const response = await axios.get(route('api.cart.products'), { params: { ids } });
+        const products = Array.isArray(response.data.products) ? response.data.products : [];
+
+        const details = {};
+        products.forEach((p) => { details[p.id] = p; });
+        this.productDetails = details;
+
+        const validIds = new Set(products.map((p) => p.id));
+        const filtered = this.items.filter((i) => validIds.has(i.product_id));
+
+        if (filtered.length !== this.items.length) {
+          this.items = filtered;
+          this.saveToLocalStorage();
+          this.syncWithBackend();
         }
+      } catch (err) {
+        console.error('Greška pri učitavanju podataka o proizvodima iz korpe:', err);
+      } finally {
+        this.isLoading = false;
+      }
     },
 
     /**
@@ -97,13 +156,10 @@ export const useCartStore = defineStore('cart', {
     saveToLocalStorage() {
       if (!Array.isArray(this.items)) this.items = [];
       const authStore = useAuthStore();
-      
+
       // localStorage koristimo SAMO za goste
       if (!authStore.user) {
         localStorage.setItem('cart', JSON.stringify(this.items));
-        console.log('💾 Sačuvano u localStorage (guest):', this.items.length, 'stavki');
-      } else {
-        console.log('⏭️ Skip localStorage (user je ulogovan)');
       }
     },
 
@@ -112,155 +168,118 @@ export const useCartStore = defineStore('cart', {
      */
     loadFromLocalStorage() {
       const authStore = useAuthStore();
-      
+
       // Ne učitavamo localStorage ako je korisnik ulogovan
       if (authStore.user) {
-        console.log('⚠️ User je ulogovan - skipujem localStorage');
         return;
       }
 
       const data = localStorage.getItem('cart');
       if (data) {
         try {
-          const parsed = JSON.parse(data);
-          this.items = Array.isArray(parsed) ? parsed : [];
-          console.log('📂 Učitano iz localStorage:', this.items.length, 'stavki');
+          this.items = normalizeItems(JSON.parse(data));
         } catch (e) {
-          console.error('❌ Greška pri parsiranju cart-a iz localStorage-a:', e);
+          console.error('Greška pri parsiranju cart-a iz localStorage-a:', e);
           localStorage.removeItem('cart');
           this.items = [];
         }
       } else {
         this.items = [];
-        console.log('📂 localStorage prazan');
       }
     },
 
     /**
      * Sinhronizuj korpu sa backend-om (SAMO za ulogovane)
      */
-    
-async syncWithBackend() {
-  const authStore = useAuthStore();
-  
-  if (!authStore.user) {
-    console.log('🚫 Sync skipped – korisnik nije ulogovan');
-    return;
-  }
+    async syncWithBackend() {
+      const authStore = useAuthStore();
 
-  try {
-    // ✅ Eksplicitno kreiraj plain array (ne Proxy)
-    const itemsToSend = Array.isArray(this.items) 
-      ? JSON.parse(JSON.stringify(this.items))  
-      : [];
-    
-    const payload = { 
-      items: itemsToSend
-    };
-    
-    console.log('📤 Sending sync request:', payload);
-    console.log('   Items type:', typeof payload.items, Array.isArray(payload.items));
-    
-    await axios.post(route('api.cart.sync'), payload);
-    console.log('✅ Sync success – korpa ažurirana u bazi | Stavki:', this.items.length);
-  } catch (err) {
-    console.error('❌ Sync error:', err.response?.data || err.message);
-  }
-},
+      if (!authStore.user) {
+        return;
+      }
+
+      try {
+        // Eksplicitno kreiraj plain array (ne Proxy)
+        const itemsToSend = Array.isArray(this.items)
+          ? JSON.parse(JSON.stringify(this.items))
+          : [];
+
+        await axios.post(route('api.cart.sync'), { items: itemsToSend });
+      } catch (err) {
+        console.error('Greška pri sinhronizaciji korpe:', err.response?.data || err.message);
+      }
+    },
+
     /**
      * Učitaj korpu iz backend-a (SAMO za ulogovane)
      */
     async loadFromBackend() {
-    const authStore = useAuthStore();
-    
-    if (!authStore.user) {
-        console.log('User not logged in – loading from localStorage');
+      const authStore = useAuthStore();
+
+      if (!authStore.user) {
         this.loadFromLocalStorage();
         return;
-    }
+      }
 
-    try {
+      try {
         const response = await axios.get(route('api.cart.show'));
-        const backendCart = response.data.cart;
-
-        // Ako nema korpe ili items je null/undefined – koristi prazno []
-        this.items = Array.isArray(backendCart?.items) ? backendCart.items : [];
-        
-        console.log('✅ Backend cart loaded:', this.items.length, 'items');
-    } catch (err) {
-        console.error('❌ Load error:', err);
+        this.items = normalizeItems(response.data.cart?.items);
+      } catch (err) {
+        console.error('Greška pri učitavanju korpe sa servera:', err);
         this.items = [];
-    }
-},
+      }
+    },
 
     /**
      * Merge guest korpe sa backend-om (poziva se SAMO pri login-u)
      */
     async mergeGuestCartOnLogin() {
       const authStore = useAuthStore();
-      
+
       if (!authStore.user) {
-        console.log('🚫 Merge skipped – korisnik nije ulogovan');
         return;
       }
 
-      // Učitaj lokalnu korpu (gostovu)
       const guestCartData = localStorage.getItem('cart');
       let guestItems = [];
-      
+
       if (guestCartData) {
         try {
-          const parsed = JSON.parse(guestCartData);
-          guestItems = Array.isArray(parsed) ? parsed : [];
-          console.log('📦 Guest cart:', guestItems.length, 'stavki');
+          guestItems = normalizeItems(JSON.parse(guestCartData));
         } catch (e) {
-          console.error('❌ Greška pri parsiranju guest cart-a:', e);
+          console.error('Greška pri parsiranju guest cart-a:', e);
           guestItems = [];
         }
       }
 
-      // Ako gost nema stavki, samo učitaj iz baze
       if (guestItems.length === 0) {
-        console.log('📦 Guest cart prazan – učitavam samo backend korpu');
         await this.loadFromBackend();
         return;
       }
 
-      // Učitaj backend korpu
       this.isLoading = true;
-      
+
       try {
         const response = await axios.get(route('api.cart.show'));
-        const backendItems = response.data.cart?.items || [];
-        
-        console.log('📦 MERGE:');
-        console.log('   Guest:', guestItems.length, 'stavki');
-        console.log('   Backend:', backendItems.length, 'stavki');
-        
-        // Merguj gostovu korpu sa backend korpom
-        let mergedItems = [...backendItems];
-        
-        guestItems.forEach(guestItem => {
-          const existing = mergedItems.find(i => i.id === guestItem.id);
+        const backendItems = normalizeItems(response.data.cart?.items);
+
+        const mergedByProductId = new Map(backendItems.map((i) => [i.product_id, { ...i }]));
+
+        guestItems.forEach((guestItem) => {
+          const existing = mergedByProductId.get(guestItem.product_id);
           if (existing) {
             existing.quantity += guestItem.quantity || 0;
-            console.log('   ✓ Merged:', guestItem.name, '(total qty:', existing.quantity + ')');
           } else {
-            mergedItems.push(guestItem);
-            console.log('   + Added:', guestItem.name);
+            mergedByProductId.set(guestItem.product_id, { ...guestItem });
           }
         });
 
-        this.items = mergedItems;
+        this.items = Array.from(mergedByProductId.values());
         this.isLoading = false;
-        
-        console.log('✅ Merge complete – ukupno:', this.items.length, 'stavki');
-        
-        // Sinhronizuj mergovan rezultat sa backend-om
+
         await this.syncWithBackend();
-        
       } catch (err) {
-        console.error('❌ Merge error:', err);
+        console.error('Greška pri merge-ovanju korpe:', err);
         this.items = [];
         this.isLoading = false;
       }
@@ -270,11 +289,10 @@ async syncWithBackend() {
      * Logout – očisti SVE
      */
     handleLogout() {
-      console.log('🔓 Logout detected – čistim SVE');
-      
       // Očisti Pinia state
       this.items = [];
-      
+      this.productDetails = {};
+
       // localStorage će auth.js očistiti
     },
   },

@@ -293,3 +293,35 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   na svaki taster. Filter panel više nije `<form>` element (plain `<div>`),
   namerno — bez `<form>` Enter u cenovnim poljima nema šta da submit-uje
   (nema native page reload rizika).
+
+## Korpa — refaktor na {product_id, quantity} (pre Faze 4)
+- ✅ **REŠENO** — `resources/js/Stores/cart.js` je ranije čuvao pun snapshot
+  proizvoda (`{id, name, price, image, quantity}`) i u `localStorage`-u i u
+  `carts.items` (JSON) na serveru, tj. cena/naziv su se "zamrzavali" u
+  trenutku dodavanja u korpu. Sada čuva isključivo `{product_id, quantity}`;
+  naziv/cena/slika/zalihe se **uvek** učitavaju sa servera preko
+  `GET /api/cart/products?ids[]=...` (`CartController::productDetails`,
+  javno dostupno i gostu — Cart stranica ne zahteva auth) i keširaju u
+  `cart.productDetails` (po `product_id`), nikad iz onoga što je korpa
+  ranije sačuvala.
+- `hydrate()` akcija poziva taj endpoint i tiho uklanja iz korpe stavke čiji
+  `product_id` više ne postoji ili nije aktivan (`is_active`) — graceful, bez
+  pada Cart/Checkout stranice. Pozivaju je `Cart.vue` (`onMounted`) i
+  `Checkout.vue` (`onMounted`, pre popunjavanja `form.items`).
+  `products.stock === null` (e-knjiga) i dalje znači "dostupno" (isto pravilo
+  kao katalog, vidi Faza 3).
+- `OrderController::store` nije menjan — već je pre ovog refaktora radio
+  isključivo sa `items.*.id` (products.id) i `items.*.quantity`, cenu/naziv
+  uvek čita iz baze (Faza 0). `Checkout.vue` mapira `cart.items`
+  (`{product_id, quantity}`) u `{id, quantity}` samo pri slanju forme.
+- Korpe sačuvane pre refaktora (stari oblik u `localStorage`-u ili u
+  `carts.items` u bazi) se tiho normalizuju pri učitavanju
+  (`normalizeItems()` u `cart.js` mapira `item.id` → `product_id` ako
+  `product_id` nedostaje) — nema migracije, `carts.items` kolona je i dalje
+  slobodan JSON (šema se ne menja).
+- Testovi: `tests/Feature/Api/CartProductDetailsTest.php` (nepostojeći
+  `product_id` i neaktivan proizvod se tiho izostavljaju, `stock === null` →
+  dostupno, `ids` je obavezan parametar). Frontend nema test runner (samo
+  PHPUnit) — ručno provereno: `php artisan serve` + `GET /api/cart/products`
+  protiv realne baze vraća samo aktivan proizvod i tiho izostavlja
+  nepostojeći ID; `npx vite build` prolazi bez grešaka.
