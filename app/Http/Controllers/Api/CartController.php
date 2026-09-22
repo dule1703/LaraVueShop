@@ -4,12 +4,44 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
 class CartController extends Controller
 {
+    /**
+     * Trenutni podaci (naziv/cena/slika/zaliha) za proizvode iz korpe.
+     * Dostupno gostu i ulogovanom korisniku (cart stranica ne zahteva auth).
+     * Cena/naziv se NIKAD ne čitaju iz onoga što je frontend cart ranije sačuvao —
+     * uvek sveže iz baze. ID-jevi koji ne postoje ili nisu aktivni se tiho
+     * izostavljaju (frontend na osnovu toga briše te stavke iz korpe).
+     * GET /api/cart/products
+     */
+    public function productDetails(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'integer',
+        ]);
+
+        $products = Product::whereIn('id', $validated['ids'])
+            ->where('is_active', true)
+            ->get(['id', 'name', 'price', 'image', 'stock']);
+
+        return response()->json([
+            'products' => $products->map(fn (Product $product) => [
+                'id'        => $product->id,
+                'name'      => $product->name,
+                'price'     => $product->price,
+                'image'     => $product->image,
+                'stock'     => $product->stock,
+                'available' => $product->stock === null || $product->stock > 0,
+            ])->values(),
+        ]);
+    }
+
     /**
      * Prikaži korpu trenutnog korisnika
      * GET /api/cart

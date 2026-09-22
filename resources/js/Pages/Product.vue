@@ -33,12 +33,7 @@ const details = computed(() => [
 
 const addToCart = () => {
     const qty = Math.min(Math.max(Number(quantity.value) || 1, 1), maxQuantity.value);
-    cart.addItem({
-        id: props.book.product_id,
-        name: props.book.title,
-        price: props.book.price,
-        image: props.book.image,
-    }, qty);
+    cart.addItem(props.book.product_id, qty);
     quantity.value = 1;
     added.value = true;
 };

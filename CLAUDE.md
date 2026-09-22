@@ -42,6 +42,13 @@ Odluke o opsegu (potvrđene):
 - Laravel 12 (PHP), Inertia.js 2, Vue 3 — CSR, ne SSR
 - PHP 8.2 lokalno / PHP 8.4 na serveru (razlika je namerna, vidi Deploy)
 - Node 22 lokalno; frontend build se radi na GitHub Actions runner-u
+- JS test runner: **vitest** (`npm run test`), dodat uz cart race-condition
+  fix (vidi Korpa niže) — do tada projekat nije imao JS testove, samo
+  PHPUnit. `vitest.config.js` je odvojen od `vite.config.js` i ručno definiše
+  `@` alias (inače dolazi iz `laravel-vite-plugin`, koji se pod `vitest`-om
+  ne pokreće). `npm install` zahteva `--legacy-peer-deps` (postojeći
+  `@vitejs/plugin-vue@^5` traži peer `vite@^5||^6`, projekat je na `vite@^7`
+  — preduslovan mismatch, ne nešto što je vitest uveo).
 - DB: MariaDB 10.11 (produkcija/staging), SQLite `:memory:` u testovima
 - Plaćanja: **PayPal implementiran** (srmklive/paypal, paypal-server-sdk);
   **Stripe NIJE implementiran** — `stripe/stripe-php` je instaliran ali se
@@ -293,3 +300,69 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   na svaki taster. Filter panel više nije `<form>` element (plain `<div>`),
   namerno — bez `<form>` Enter u cenovnim poljima nema šta da submit-uje
   (nema native page reload rizika).
+
+## Korpa — refaktor na {product_id, quantity} (pre Faze 4)
+- ✅ **REŠENO** — `resources/js/Stores/cart.js` je ranije čuvao pun snapshot
+  proizvoda (`{id, name, price, image, quantity}`) i u `localStorage`-u i u
+  `carts.items` (JSON) na serveru, tj. cena/naziv su se "zamrzavali" u
+  trenutku dodavanja u korpu. Sada čuva isključivo `{product_id, quantity}`;
+  naziv/cena/slika/zalihe se **uvek** učitavaju sa servera preko
+  `GET /api/cart/products?ids[]=...` (`CartController::productDetails`,
+  javno dostupno i gostu — Cart stranica ne zahteva auth) i keširaju u
+  `cart.productDetails` (po `product_id`), nikad iz onoga što je korpa
+  ranije sačuvala.
+- `hydrate()` akcija poziva taj endpoint i tiho uklanja iz korpe stavke čiji
+  `product_id` više ne postoji ili nije aktivan (`is_active`) — graceful, bez
+  pada Cart/Checkout stranice. Pozivaju je `Cart.vue` (`onMounted`) i
+  `Checkout.vue` (`onMounted`, pre popunjavanja `form.items`).
+  `products.stock === null` (e-knjiga) i dalje znači "dostupno" (isto pravilo
+  kao katalog, vidi Faza 3).
+- `OrderController::store` nije menjan — već je pre ovog refaktora radio
+  isključivo sa `items.*.id` (products.id) i `items.*.quantity`, cenu/naziv
+  uvek čita iz baze (Faza 0). `Checkout.vue` mapira `cart.items`
+  (`{product_id, quantity}`) u `{id, quantity}` samo pri slanju forme.
+- Korpe sačuvane pre refaktora (stari oblik u `localStorage`-u ili u
+  `carts.items` u bazi) se tiho normalizuju pri učitavanju
+  (`normalizeItems()` u `cart.js` mapira `item.id` → `product_id` ako
+  `product_id` nedostaje) — nema migracije, `carts.items` kolona je i dalje
+  slobodan JSON (šema se ne menja).
+- Testovi: `tests/Feature/Api/CartProductDetailsTest.php` (nepostojeći
+  `product_id` i neaktivan proizvod se tiho izostavljaju, `stock === null` →
+  dostupno, `ids` je obavezan parametar). Ručno provereno: `php artisan
+  serve` + `GET /api/cart/products` protiv realne baze vraća samo aktivan
+  proizvod i tiho izostavlja nepostojeći ID; `npx vite build` prolazi bez
+  grešaka.
+- ✅ **REŠENO (race condition otkriven pri code review-u)** — `Cart.vue` je u
+  `onMounted` zvao **samo** `cart.hydrate()`, oslanjajući se da je
+  `app.js` (`resources/js/app.js`) već učitao korpu
+  (`loadFromBackend`/`loadFromLocalStorage`). Ali `app.js` te pozive radi
+  **posle** `app.mount(el)`, tj. **posle** što se `onMounted` inicijalne
+  stranice već izvršio (Vue izvršava `mounted` hook-ove dece sinhrono unutar
+  `mount()`). Na hladnom loadu direktno na `/cart` (ili kad je logovan
+  korisnik pa je `loadFromBackend()` async), `hydrate()` je video praznu
+  `cart.items`, odmah odustajao (`productDetails` ostaje `{}`), a pošto se
+  ne re-triggeruje automatski kad `items` kasnije stigne — korisnik je video
+  stavke u korpi sa cenom "0,00 €" dok se stranica ponovo ne mount-uje (npr.
+  SPA navigacija na drugu stranicu pa nazad, gde je `cart.items` već
+  popunjen iz prethodnog mount-a). **Nije** bilo Vue devtools ni skriveni keš
+  — Pinia state se ne sinhronizuje nazad iz `localStorage`-a same od sebe;
+  ručna izmena `localStorage`-a u browseru nema efekta dok se ne desi hard
+  reload, i tada aktivira isti race ako je `/cart` prva stranica koja se
+  učita.
+  Popravka: `Cart.vue` i `Checkout.vue` sada u `onMounted`-u rade `await
+  cart.loadFromBackend()` (interno pada nazad na `loadFromLocalStorage()` za
+  gosta — nema više duple if/else grane po stranici) **pa tek onda** `await
+  cart.hydrate()`. `pinia-plugin-persistedstate` je u `package.json`
+  (dependencies) ali se **nigde ne koristi** (nema `pinia.use(...)` u
+  `app.js`) — nije uzrok, samo neiskorišćena zavisnost (isti obrazac kao
+  `stripe/stripe-php`, vidi Stack).
+  Test: `resources/js/Stores/cart.test.js` (novi `vitest` setup — projekat do
+  sada nije imao JS test runner; `vitest.config.js` ručno dodaje `@` alias
+  jer ovde ne radi `laravel-vite-plugin`, vidi Stack). Testovi direktno
+  reprodukuju race (hydrate pre load-a ⇒ `productDetails` ostaje `{}` posle
+  kasnijeg load-a ⇒ `totalAmount === 0`) i potvrđuju ispravan redosled
+  (load pa hydrate ⇒ cena sa servera, nikad iz stare "zamrznute" korpe).
+  `npm run test` (`vitest run`) — dodato u `package.json` scripts i u CI
+  (`.github/workflows/deploy.yml`, `tests` job, odmah posle `npm run build`
+  — pre `composer test`, tako da JS regresija zaustavi pipeline pre nego što
+  se PHP testovi i deploy uopšte pokrenu).
