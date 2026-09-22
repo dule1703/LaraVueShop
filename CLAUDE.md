@@ -362,4 +362,7 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   reprodukuju race (hydrate pre load-a ⇒ `productDetails` ostaje `{}` posle
   kasnijeg load-a ⇒ `totalAmount === 0`) i potvrđuju ispravan redosled
   (load pa hydrate ⇒ cena sa servera, nikad iz stare "zamrznute" korpe).
-  `npm run test` (`vitest run`) — dodato u `package.json` scripts.
+  `npm run test` (`vitest run`) — dodato u `package.json` scripts i u CI
+  (`.github/workflows/deploy.yml`, `tests` job, odmah posle `npm run build`
+  — pre `composer test`, tako da JS regresija zaustavi pipeline pre nego što
+  se PHP testovi i deploy uopšte pokrenu).
