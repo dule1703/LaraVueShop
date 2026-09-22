@@ -26,7 +26,8 @@ class BookModelTest extends TestCase
         $this->assertSame(13, strlen($book->isbn13));
         $this->assertContains($book->format, Book::FORMATS);
         $this->assertContains($book->script, Book::SCRIPTS);
-        $this->assertNull($book->search_text);
+        // Faza 4: BookObserver popunjava search_text pri create-u, više nije NULL.
+        $this->assertNotEmpty($book->fresh()->search_text);
         $this->assertTrue($book->product->book->is($book));
     }
 
@@ -154,6 +155,10 @@ class BookModelTest extends TestCase
 
         $book->fill(['search_text' => 'nesto'])->save();
 
-        $this->assertNull($book->fresh()->search_text);
+        // fill() tiho ignoriše search_text (nije fillable); BookObserver posle save()-a
+        // ionako preračunava kolonu iz naslova/autora/izdavača, pa nikad nije "nesto".
+        $fresh = $book->fresh();
+        $this->assertNotSame('nesto', $fresh->search_text);
+        $this->assertNotEmpty($fresh->search_text);
     }
 }
