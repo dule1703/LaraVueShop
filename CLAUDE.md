@@ -461,3 +461,74 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   serve` + Inertia JSON odgovor): pretraga na ćirilici (`Андрић`, `Дервиш`)
   i latinici (`seobe`, `crnjanski`) vraća očekivane naslove; `npx vite build`
   prolazi bez grešaka.
+
+## Inventar — stock_movements (Faza 5, poslednja faza knjižare)
+- `stock_movements` tabela postoji od Faze 1, ali logika je nikad nije
+  punila. Sva logika upisa/povrata zaliha sad ide isključivo kroz
+  `app/Services/InventoryService.php` (isti obrazac kao `BookService` —
+  centralni servis, ne piše se direktno po kontrolerima), uvek uz
+  odgovarajući `stock_movements` red u istoj `DB::transaction` kao i sama
+  promena `products.stock`.
+- **Kreiranje porudžbine** — `OrderController::store` (Faza 0) i dalje
+  atomski umanjuje zalihu (`WHERE stock >= :q`); dodat je upis jednog
+  `stock_movements` reda po stavci (`delta = -quantity`, `reason = 'order'`,
+  `order_id` postavljen, `user_id = Auth::id()` — `NULL` za gosta), unutar
+  iste transakcije.
+- **Otkazivanje/neuspelo plaćanje** — proveren je ceo tok: postoji samo
+  PayPal cancel/fail (`PayPalController::cancel/success`); **COD nema
+  cancel/fail rutu uopšte** (COD porudžbina ide direktno na
+  `order.cod.success`, nema toka koji bi je označio kao otkazanu/neuspelu),
+  pa tamo nije ni bilo šta da se popravi. PayPal `cancel()` i `success()`
+  (catch grana — capture nije `COMPLETED`) ranije **nisu vraćali zalihu** —
+  to je bio propust koji je ova faza zatvorila.
+  - `InventoryService::restoreStock(Order $order, string $reason, string $newStatus)`
+    vraća zalihu (`+quantity` po stavci), upisuje `stock_movements`
+    (`reason` = `'cancel'` ili `'payment_failed'`) i **u istoj transakciji**
+    postavlja finalni status porudžbine.
+  - **Bitno (otkriveno pri code review-u tokom pisanja):** status porudžbine
+    se MORA postaviti unutar iste `lockForUpdate()` transakcije kao povrat
+    zaliha, ne posle (u pozivaocu). Prvobitna verzija je vraćala zalihu
+    unutar zaključane transakcije, a status je upisivala posle, kao
+    odvojeni `$order->update()` poziv — ostavljalo je prozor u kom je drugi
+    paralelni zahtev na istu porudžbinu (npr. dupli klik na cancel) i dalje
+    video status kao "pending" i dupli put vraćao zalihu. Ispravljeno tako
+    da ceo blok (guard + povrat + status) bude jedna zaključana transakcija
+    (isti princip kao `WHERE stock >= :q` guard iz Faze 0, samo nad
+    `orders` redom umesto `products` redom). Guard: ako je porudžbina već
+    `cancelled`/`failed`, povrat se preskače (idempotentno).
+- **Ručna dopuna (admin)** — `POST /admin/books/{book}/restock`
+  (`BookController::restock`, dugme "Dopuni" u `Admin/Books/Index.vue`,
+  modal `resources/js/Components/Admin/RestockForm.vue` sa količinom i
+  opcionom napomenom). Upisuje `stock_movements` (`reason = 'manual'`,
+  `user_id` = admin koji je izvršio akciju, `note` opciono). `stock = NULL`
+  (e-knjiga, neograničena zaliha) se **ne dopunjava** — kontroler odbija
+  zahtev pre poziva servisa (nema smisla "dopuniti" neograničenu zalihu, a
+  upis bi ostavio zbunjujući `stock_movements` red).
+- **Niska zaliha (admin)** — nije napravljena posebna stranica; `GET
+  /admin/books?low_stock=1` (opciono `&threshold=N`, default 5) filtrira
+  postojeću listu knjiga na `stock IS NOT NULL AND stock < threshold`,
+  sortirano rastuće po `stock`. Bez filtera lista ostaje kao pre (sort po
+  nazivu), ali redovi ispod praga su i dalje vizuelno istaknuti
+  (žuta pozadina) — threshold se uvek računa i šalje kao prop, filter samo
+  suzuje listu. `stock = NULL` se nikad ne tretira kao "nizak".
+- **OTVORENO PITANJE #5 (stock = NULL za e-knjige) — NIJE REŠENO,
+  svesna odluka.** `WHERE stock >= :q` guard u `OrderController::store`
+  i dalje ne dozvoljava kupovinu `stock = NULL` proizvoda (SQL poređenje
+  sa `NULL` je uvek nepoznato/false). Pošto e-knjige nisu u opsegu
+  (vidi "Šta je ovaj projekat" gore), ovo ostaje dokumentovano ograničenje
+  — rešava se tek kad/ako e-knjige uđu u opseg, zajedno sa ostatkom te
+  odluke (cena, format isporuke), ne parcijalno sad dok se dira ovaj deo
+  koda.
+- Testovi: `tests/Feature/OrderStoreTest.php` (stock_movements red po
+  stavci porudžbine, ispravan `user_id` za gosta/ulogovanog korisnika),
+  `tests/Feature/PayPalPaymentTest.php` (cancel i payment_failed vraćaju
+  zalihu i upisuju stock_movements; dvostruko otkazivanje ne duplira
+  povrat — race-guard test istog stila kao Faza 0
+  `dve_porudzbine_za_poslednji_primerak_samo_jedna_uspe`),
+  `tests/Feature/Admin/BookRestockTest.php` (uspešna dopuna, validacija
+  količine, e-knjiga sa `stock = NULL` odbijena), `tests/Feature/Admin/
+  BookLowStockFilterTest.php` (filter/threshold/sort, e-knjiga isključena),
+  `tests/Feature/Admin/AdminAccessTest.php` (nova `books.restock` ruta
+  dodata u centralnu listu — gost/ne-admin provere). Pun suite:
+  `php artisan test` (348 passed) + `npm run test` (vitest, 5 passed) +
+  `npx vite build` prolaze bez grešaka.

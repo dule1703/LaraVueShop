@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Contracts\PaymentGateway;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -119,6 +120,104 @@ class PayPalPaymentTest extends TestCase
 
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'cancelled']);
         $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'status' => 'cancelled']);
+    }
+
+    /**
+     * Faza 5: otkazivanje vraća zalihu i upisuje stock_movements red (reason = 'cancel').
+     */
+    public function test_otkazivanje_vraca_zalihu_i_upisuje_stock_movement(): void
+    {
+        $owner = User::factory()->create();
+        $order = $this->makeOrder($owner);
+        $product = Product::factory()->create(['stock' => 3]);
+        $order->items()->create([
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'product_price' => $product->price,
+            'quantity' => 2,
+        ]);
+
+        $this->app->instance(PaymentGateway::class, new FakePaymentGateway());
+
+        $this->actingAs($owner)
+            ->get(route('paypal.cancel', $order))
+            ->assertRedirect(route('checkout'));
+
+        $this->assertEquals(5, $product->fresh()->stock);
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $product->id,
+            'delta' => 2,
+            'reason' => 'cancel',
+            'order_id' => $order->id,
+            'user_id' => $owner->id,
+        ]);
+    }
+
+    /**
+     * Dva paralelna zahteva na istu porudžbinu ne smeju duplo da vrate zalihu
+     * — guard u InventoryService::restoreStock preskače porudžbinu koja je
+     * već u terminalnom stanju (isti princip kao WHERE stock >= :q iz Faze 0).
+     */
+    public function test_dvostruko_otkazivanje_ne_duplira_povrat_zaliha(): void
+    {
+        $owner = User::factory()->create();
+        $order = $this->makeOrder($owner);
+        $product = Product::factory()->create(['stock' => 3]);
+        $order->items()->create([
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'product_price' => $product->price,
+            'quantity' => 2,
+        ]);
+
+        $this->app->instance(PaymentGateway::class, new FakePaymentGateway());
+
+        $this->actingAs($owner)->get(route('paypal.cancel', $order));
+        $this->actingAs($owner)->get(route('paypal.cancel', $order));
+
+        $this->assertEquals(5, $product->fresh()->stock);
+        $this->assertDatabaseCount('stock_movements', 1);
+    }
+
+    /**
+     * Faza 5: kad capture ne uspe (status != COMPLETED / gateway baci grešku),
+     * zaliha se vraća i upisuje se stock_movements red (reason = 'payment_failed').
+     */
+    public function test_neuspelo_placanje_vraca_zalihu_i_upisuje_stock_movement(): void
+    {
+        $owner = User::factory()->create();
+        $order = $this->makeOrder($owner);
+        $order->payment()->create([
+            'provider' => 'paypal',
+            'provider_payment_id' => 'PAYPAL-ORDER-1',
+            'amount' => $order->total_price,
+            'currency' => 'EUR',
+            'status' => 'pending',
+        ]);
+        $product = Product::factory()->create(['stock' => 3]);
+        $order->items()->create([
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'product_price' => $product->price,
+            'quantity' => 1,
+        ]);
+
+        $fake = new FakePaymentGateway(captureOrderResponse: ['status' => 'DECLINED']);
+        $this->app->instance(PaymentGateway::class, $fake);
+
+        $this->actingAs($owner)
+            ->get(route('paypal.success', $order) . '?token=PAYPAL-ORDER-1')
+            ->assertRedirect(route('payment.failed', $order));
+
+        $this->assertEquals(4, $product->fresh()->stock);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'failed']);
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $product->id,
+            'delta' => 1,
+            'reason' => 'payment_failed',
+            'order_id' => $order->id,
+            'user_id' => $owner->id,
+        ]);
     }
 
     public static function ownerGatewayRoutes(): array

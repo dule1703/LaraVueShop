@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\StockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -86,6 +87,14 @@ class OrderController extends Controller
 
             foreach ($orderItems as $orderItem) {
                 OrderItem::create($orderItem + ['order_id' => $order->id]);
+
+                StockMovement::create([
+                    'product_id' => $orderItem['product_id'],
+                    'delta'      => -$orderItem['quantity'],
+                    'reason'     => 'order',
+                    'order_id'   => $order->id,
+                    'user_id'    => Auth::id(),
+                ]);
             }
 
             return $order;

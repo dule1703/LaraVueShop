@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Contracts\PaymentGateway;
+use App\Services\InventoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Models\Order;
 
 class PayPalController extends Controller
 {
-    public function __construct(private PaymentGateway $gateway)
+    public function __construct(private PaymentGateway $gateway, private InventoryService $inventory)
     {
     }
 
@@ -129,7 +130,7 @@ class PayPalController extends Controller
             if ($order->payment) {
                 $order->payment->update(['status' => 'failed']);
             }
-            $order->update(['status' => 'failed']);
+            $this->inventory->restoreStock($order, 'payment_failed', 'failed');
 
             return redirect()->route('payment.failed', $order->id)
                 ->with('error', 'Plaćanje nije moglo biti završeno.');
@@ -147,7 +148,7 @@ class PayPalController extends Controller
             ]);
         }
 
-        $order->update(['status' => 'cancelled']);
+        $this->inventory->restoreStock($order, 'cancel', 'cancelled');
 
         return redirect()->route('checkout')->with('error', 'Plaćanje je otkazano.');
     }

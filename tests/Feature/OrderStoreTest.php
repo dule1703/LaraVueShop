@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -87,6 +88,69 @@ class OrderStoreTest extends TestCase
         $response->assertRedirect();
         $this->assertDatabaseCount('orders', 1);
         $this->assertEquals(7, $product->fresh()->stock);
+    }
+
+    /**
+     * Faza 5: svaka stavka porudžbine upisuje tačan stock_movements red
+     * (delta = -quantity, reason = 'order', order_id postavljen) u istoj
+     * transakciji kao i umanjenje zaliha.
+     */
+    public function test_porudzbina_upisuje_stock_movements_redove(): void
+    {
+        $this->withoutVite();
+
+        $category = Category::factory()->active()->create();
+        $productA = Product::factory()->for($category)->create(['price' => 10, 'stock' => 5]);
+        $productB = Product::factory()->for($category)->create(['price' => 20, 'stock' => 5]);
+
+        $payload = $this->checkoutPayload([
+            ['id' => $productA->id, 'quantity' => 2],
+            ['id' => $productB->id, 'quantity' => 1],
+        ]);
+
+        $response = $this->postJson('/orders', $payload);
+        $response->assertRedirect();
+
+        $order = Order::firstOrFail();
+
+        $this->assertDatabaseCount('stock_movements', 2);
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $productA->id,
+            'delta' => -2,
+            'reason' => 'order',
+            'order_id' => $order->id,
+            'user_id' => null,
+        ]);
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $productB->id,
+            'delta' => -1,
+            'reason' => 'order',
+            'order_id' => $order->id,
+            'user_id' => null,
+        ]);
+    }
+
+    public function test_porudzbina_ulogovanog_korisnika_upisuje_user_id_u_stock_movements(): void
+    {
+        $this->withoutVite();
+
+        $user = User::factory()->create();
+        $category = Category::factory()->active()->create();
+        $product = Product::factory()->for($category)->create(['price' => 10, 'stock' => 5]);
+
+        $payload = $this->checkoutPayload([
+            ['id' => $product->id, 'quantity' => 1],
+        ], ['email' => $user->email]);
+
+        $response = $this->actingAs($user)->postJson('/orders', $payload);
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $product->id,
+            'delta' => -1,
+            'reason' => 'order',
+            'user_id' => $user->id,
+        ]);
     }
 
     public function test_nedovoljno_zaliha_vraca_4xx_i_ne_menja_bazu(): void
