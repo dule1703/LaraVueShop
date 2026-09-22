@@ -13,6 +13,26 @@ konvencije i kontekst koji ne treba svaki put ponovo objašnjavati.
   kod — nikad poseban commit/push samo za dokumentaciju. Standardna praksa.
 - Promene idu preko PR-a ka `develop`/`main`; korisnik merge-uje (bez
   direktnog push-a).
+- **Feature grane su privremene.** Kad se grana merge-uje u `develop` (i
+  kasnije u `main`, ako grana ide i tim putem), i lokalna i remote grana
+  se **brišu** — ne ostaju kao arhiva. Merge commit čuva istoriju, brisanje
+  grane ne gubi ništa. Važi za svaku granu otvorenu za pojedinačni korak/fazu.
+
+### ⚠️ Obavezna checklista u SVAKOM izveštaju o završenom koraku/fazi
+Bez obzira da li je odgovor "ništa", izveštaj **MORA** eksplicitno navesti:
+1. **Migracije** — da li treba pokrenuti migracije na lokalu/staging/
+   production nakon pull-a/deploy-a (npr. nove tabele).
+2. **Ručne artisan komande van deploy pipeline-a** — da li postoji komanda
+   koja NIJE u deploy pipeline-u i mora se ručno pokrenuti na svakom
+   okruženju posebno (npr. `catalog:import-books`,
+   `catalog:convert-products-to-books`) — ako da, TAČNE komande i putanje
+   po okruženju (lokalno vs SSH na staging/production, uključujući
+   `PHP_BIN` putanju sa servera).
+3. **Nove zavisnosti** (npm/composer paket) koje zahtevaju install/lock
+   fajl osvežavanje pre nego što promene budu vidljive.
+
+Ovo ide na kraj svakog izveštaja kao kratka checklista, ne samo kad se
+Claude Code seti.
 
 ## Model selection strategija
 - **Haiku** — čitanje fajlova, formatiranje, prosti checks
