@@ -6,6 +6,7 @@ use App\Models\Author;
 use App\Models\Book;
 use App\Models\Category;
 use App\Models\Publisher;
+use App\Support\SearchText;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Validator;
@@ -19,7 +20,7 @@ class BookCatalog
     public const PER_PAGE = 12;
 
     public const FILTER_KEYS = [
-        'category', 'author', 'publisher', 'language', 'script', 'format', 'price_min', 'price_max', 'in_stock',
+        'category', 'author', 'publisher', 'language', 'script', 'format', 'price_min', 'price_max', 'in_stock', 'search',
     ];
 
     /**
@@ -41,6 +42,7 @@ class BookCatalog
             'price_min' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'price_max' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'in_stock' => ['nullable', 'boolean'],
+            'search' => ['nullable', 'string', 'max:255'],
         ])->valid();
 
         $filters = [];
@@ -98,6 +100,16 @@ class BookCatalog
         // NULL zaliha = neograničeno (e-knjiga) i računa se kao "na stanju".
         if ($filters['in_stock']) {
             $query->where(fn (Builder $q) => $q->where('products.stock', '>', 0)->orWhereNull('products.stock'));
+        }
+
+        if ($filters['search'] !== null) {
+            $normalized = SearchText::normalize($filters['search']);
+            if ($normalized !== '') {
+                // Prost LIKE nad normalizovanom search_text kolonom — whereFullText()
+                // se namerno ne koristi (ne radi na SQLite, ponaša se drugačije na MariaDB).
+                $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $normalized);
+                $query->where('books.search_text', 'like', '%'.$escaped.'%');
+            }
         }
 
         return $query;

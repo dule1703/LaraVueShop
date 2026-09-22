@@ -21,6 +21,9 @@ class BookService
             $bookModel = $productModel->book()->create($book);
 
             $this->replaceAuthors($bookModel, $authors);
+            // Autori se menjaju preko pivot tabele (detach/attach), što ne okida Book
+            // "saved" event — touch() ga okida da BookObserver preračuna search_text i sa autorima.
+            $bookModel->touch();
 
             return $bookModel;
         });
@@ -36,6 +39,7 @@ class BookService
             $book->update($bookData);
 
             $this->replaceAuthors($book, $authors);
+            $book->touch();
 
             return $book;
         });

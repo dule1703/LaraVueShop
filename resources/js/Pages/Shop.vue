@@ -16,20 +16,20 @@ const PRICE_DEBOUNCE_MS = 400;
 
 const form = reactive({ ...props.filters });
 const showFilters = ref(false);
-let priceDebounceTimer = null;
+let debounceTimer = null;
 
 // Back/forward i "Poništi filtere" menjaju props bez remount-a komponente.
 watch(() => props.filters, (filters) => Object.assign(form, filters));
 
-watch([() => form.price_min, () => form.price_max], () => {
-    clearTimeout(priceDebounceTimer);
-    priceDebounceTimer = setTimeout(apply, PRICE_DEBOUNCE_MS);
+watch([() => form.price_min, () => form.price_max, () => form.search], () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(apply, PRICE_DEBOUNCE_MS);
 });
 
 const hasActiveFilters = computed(() => Object.values(props.filters).some((v) => v !== null && v !== false));
 
 function apply() {
-    clearTimeout(priceDebounceTimer);
+    clearTimeout(debounceTimer);
 
     const params = {};
     for (const [key, value] of Object.entries(form)) {
@@ -63,6 +63,18 @@ function categoryLabel(category) {
                     >
                         Filteri
                     </button>
+                </div>
+
+                <div class="mb-6">
+                    <label for="f-search" class="sr-only">Pretraga</label>
+                    <input
+                        id="f-search"
+                        v-model="form.search"
+                        type="search"
+                        placeholder="Pretraži naslov, autora, izdavača..."
+                        class="block w-full rounded-md border border-gray-300 bg-white text-sm px-3 py-2"
+                        @keyup.enter="apply"
+                    />
                 </div>
 
                 <div class="lg:grid lg:grid-cols-4 lg:gap-8">
