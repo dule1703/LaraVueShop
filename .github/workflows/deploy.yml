@@ -35,6 +35,9 @@ jobs:
           npm ci --legacy-peer-deps
           npm run build
 
+      - name: Pokreni JS testove (vitest)
+        run: npm run test
+
       - name: Generisi app key
         run: php artisan key:generate
 
