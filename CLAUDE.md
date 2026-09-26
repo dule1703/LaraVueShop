@@ -385,6 +385,40 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   (`.github/workflows/deploy.yml`, `tests` job, odmah posle `npm run build`
   — pre `composer test`, tako da JS regresija zaustavi pipeline pre nego što
   se PHP testovi i deploy uopšte pokrenu).
+- ✅ **REŠENO (drugi, POVEZAN ali nov race, otkriven posle gore opisane
+  popravke)** — `/cart` je ispravno prikazivao cenu, ali odmah posle **punog**
+  (ne-SPA) prelaska na `/checkout` (npr. klik na obično `<a href="/checkout">`
+  dugme na Cart.vue, ili hard refresh direktno na `/cart`/`/checkout`) cena je
+  za ULOGOVANOG korisnika pokazivala 0,00 €. Uzrok nije bio u `cart.js` (ta
+  logika je već bila ispravna), nego u `app.js`: `authStore.init()` se pozivao
+  TEK POSLE `app.mount()`, dok se `onMounted` stranice (Cart.vue/Checkout.vue)
+  izvršava SINHRONO unutar `app.mount()` (Vue mounted-hook ponašanje dece, isti
+  mehanizam koji je već dokumentovan gore) - dakle PRE `authStore.init()`. Na
+  svakom punom učitavanju stranice `cart.loadFromBackend()` je zato video
+  `authStore.user === null` i ulogovanog korisnika tretirao kao gosta,
+  učitavajući praznu/zastarelu `localStorage` korpu umesto prave korpe sa
+  servera. Na SPA navigaciji (Inertia `<Link>`) buga nema, jer `authStore`
+  ostaje ispravno inicijalizovan od prvog (punog) učitavanja te iste
+  browser-tab sesije - zato je `/cart` (obično dostignut preko `<Link>`)
+  izgledao ispravno, a `/checkout` (dostignut preko običnog `<a>`, tj. punog
+  reload-a) nije.
+  Popravka: `app.js` sada zove `authStore.init(props.initialPage.props.auth?.user
+  ?? null)` (i inicijalno učitavanje korpe) PRE `app.mount(el)`, ne posle.
+  `props.initialPage` je Inertia-in initial page objekat dostupan sinhrono u
+  `createInertiaApp`-ovom `setup()`-u, za razliku od `usePage()` čiji
+  modul-level `page` ref popunjava tek Inertia-ina `App` komponenta u SVOM
+  `setup()`-u (tj. i dalje unutar `app.mount()`, ali POSLE Cart.vue/Checkout.vue
+  onMounted-a - zato `usePage()` ovde nije bio opcija). `auth.js`:
+  `init(initialUser = null)` sad prima korisnika eksplicitno umesto da ga sam
+  sinhrono čita iz `usePage()`; `usePage()` se i dalje koristi unutra, ali samo
+  za `watch()` koji hvata KASNIJE promene (login/logout/switch tokom SPA
+  sesije), ne za inicijalnu vrednost.
+  Test: `resources/js/Stores/auth.test.js` - jedan test pinuje STARI (bagovan)
+  redosled (`app.mount()` pa `authStore.init()`) i dokumentuje tačan simptom
+  (korpa/cena ostaju na 0 za ulogovanog korisnika), drugi potvrđuje ispravljen
+  redosled (`authStore.init()` pa `app.mount()`) daje tačnu cenu. Pun suite:
+  `php artisan test` (348 passed) + `npm run test` (vitest, 7 passed) +
+  `npx vite build` prolaze bez grešaka.
 
 ## Pretraga — ćirilica/latinica (Faza 4)
 - `app/Support/SearchText.php::normalize()` — malo slovo + ćirilica
