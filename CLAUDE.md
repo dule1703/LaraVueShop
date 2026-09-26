@@ -638,12 +638,37 @@ stranica).
   stranici) je imao odvojen hardkodovan fallback `env('APP_NAME',
   'LaraVueShop')` — fallback promenjen na `'Ex Libris'` (samo string default,
   logika kreiranja PayPal porudžbine nije dirana).
-  **Napomena (van opsega ovog koraka):** `.env.example` je zatečen sa dva
-  spojena bloka env varijabli bez razdvajajućeg newline-a (linija 9:
-  `APP_FAKER_LOCALE=en_USAPP_NAME=Laravel` — efektivno dva puta ceo template,
-  mysql pa sqlite konfiguracija). Ime brenda je ažurirano na oba mesta gde se
-  pojavljuje, ali sama duplikacija/malformisan fajl nije popravljena (nije
-  vezano za redizajn, treba posebno rešiti).
+  ✅ **REŠENO (poseban hotfix, posle merge-a Faze 6 — CI je pukao na
+  dotenv parse grešci pre nego što je ovo stiglo da se popravi):**
+  `.env.example` je bio zatečen sa dva spojena bloka env varijabli bez
+  razdvajajućeg newline-a (linija 9: `APP_FAKER_LOCALE=en_USAPP_NAME=...`).
+  Uzrok, potvrđen kroz `git log --follow -p -- .env.example`: commit
+  `2f67387` ("Fix DababaseSeeder class name") je ubacio pravu, prilagođenu
+  konfiguraciju projekta (mysql, `laravue_shop` baza, pravi mail server,
+  PayPal placeholder-i) NASRED originalnog, generičkog Laravel
+  `.env.example` stub-a (iz `Initial commit`) — bez uklanjanja ostatka tog
+  stub-a, koji je ostao zalepljen odmah iza (drugi, potpuno redundantan
+  blok: `sqlite` baza, `log` mailer, generički `hello@example.com`, bez
+  PayPal sekcije — ništa jedinstveno projektu). Kad je Faza 6 menjala
+  `APP_NAME=Laravel` → `APP_NAME="Ex Libris"` preko `replace_all`, promena
+  je ispravno pogodila OBA doslovna pojavljivanja stringa — uključujući ono
+  zalepljeno usred linije 9 — ali dodavanje navodnika oko vrednosti
+  (`"Ex Libris"`, zbog razmaka) je baš na tom mestu učinilo liniju
+  dovoljno "čudnom" da PHP dotenv parser prijavi "Encountered unexpected
+  whitespace" umesto da je tiho (pogrešno) parsira kao ranije.
+  **Popravka:** ceo drugi (redundantan) blok obrisan — zadržan samo prvi,
+  ispravan/prilagođen profil (mysql/pravi mail/PayPal, sad sa
+  `APP_NAME="Ex Libris"` na vrhu), sa urednim newline-om na kraju. Fajl
+  ide sa 135 na 69 linija, 51 ključ (bez duplikata).
+  **Provereno tačno onako kako CI radi**
+  (`.github/workflows/deploy.yml`): `cp .env.example .env` pa pravi
+  `composer install --no-interaction --prefer-dist` (ne samo test env) —
+  `post-autoload-dump` hook pokreće `php artisan package:discover`, što
+  bootuje aplikaciju i parsira `.env`; prošlo bez greške. Dodatno
+  provereno direktno preko `Dotenv\Dotenv::parse()`/`createImmutable()`.
+  Lokalni `.env` (gitignored, nije deo ovog fajla/PR-a) je posle ovog testa
+  vraćen na svoj pravi sadržaj iz backupa - test nije trajno izmenio ništa
+  van `.env.example`.
 - **Paleta** — CSS varijable u `resources/css/app.css` (`:root`, prefiks
   `--brand-*`, **ne** HSL triplet kao postojeći shadcn `--background`/
   `--foreground` tokeni, jer je paleta zadata u heksadecimalnom zapisu):
