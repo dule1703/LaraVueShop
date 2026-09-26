@@ -34,7 +34,7 @@ class PayPalGateway implements PaymentGateway
             'application_context' => [
                 'return_url' => route('paypal.success', $order->id),
                 'cancel_url' => route('paypal.cancel', $order->id),
-                'brand_name' => env('APP_NAME', 'LaraVueShop'),
+                'brand_name' => env('APP_NAME', 'Ex Libris'),
                 'locale' => 'sr-RS',
                 'user_action' => 'PAY_NOW',
             ],

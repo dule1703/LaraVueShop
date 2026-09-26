@@ -26,12 +26,40 @@ export const useAuthStore = defineStore('auth', {
       this.user = initialUser;
       this.previousUserId = this.user?.id || null;
 
-      // Watch za promene korisnika
+      // Watch za promene korisnika. `page.props` je undefined dok Inertia-ina
+      // App komponenta ne postavi svoj interni `page` ref (tek unutar
+      // app.mount(), posle ovog init() poziva - vidi app.js) - watch()
+      // sinhrono evaluira ovaj getter ODMAH pri pozivu (radi prikupljanja
+      // zavisnosti), bez obzira na `immediate: false`, pa `page.props.auth`
+      // (bez `?.` posle `props`) puca sa "Cannot read properties of
+      // undefined (reading 'auth')" i taj throw izlazi iz watch()-a jer
+      // van komponente nema error-boundary instance koja bi ga progutala -
+      // zaustavlja ceo createInertiaApp setup() PRE app.mount(), bela
+      // strana. `page.props?.auth?.user` bezbedno vraća undefined dok
+      // page.value ne bude postavljen, watch i dalje ostaje pretplaćen na
+      // promenu (computed unutar `page.props` čita isti reaktivni `page`
+      // ref), pa se okine čim Inertia postavi pravu stranicu.
       watch(
-        () => page.props.auth?.user,
-        async (newUser, oldUser) => {
+        () => page.props?.auth?.user,
+        async (newUser) => {
           const newUserId = newUser?.id || null;
-          const oldUserId = oldUser?.id || null;
+          // NAMERNO čitamo prethodno stanje iz this.previousUserId (postavljeno
+          // sinhrono iz initialUser na početku init()-a), NE iz watch()-ovog
+          // drugog argumenta (oldUser). Vue watch() internu "staru vrednost"
+          // prvi put postavlja na ono što getter vrati PRI SAMOM POZIVU
+          // watch()-a (vidi komentar iznad) - a to je uvek undefined (Inertia
+          // još nije postavila page.props). Da smo koristili taj oldUser, svaki
+          // PUN reload za VEĆ ulogovanog korisnika bi na prvom stvarnom
+          // okidanju (kad Inertia popuni page.props tokom app.mount()) lažno
+          // izgledao kao tranzicija null -> user, tj. kao SCENARIO 2 (LOGIN) -
+          // iako se korisnik samo hidrira, ne prijavljuje. To bi na svakom
+          // reload-u nepotrebno duplo gađalo /api/cart i, gore, pogrešno
+          // pokrenulo mergeGuestCartOnLogin() ako bi u localStorage-u slučajno
+          // ostala gost korpa. this.previousUserId je već tačan (iz initialUser),
+          // pa poređenje protiv njega ispravno prepoznaje ovo kao SCENARIO 4
+          // (isti korisnik) umesto lažnog login-a. Reprodukovano i potvrđeno
+          // u pravom browseru (headless Chrome + CDP), vidi auth.test.js.
+          const oldUserId = this.previousUserId;
 
           console.log('👤 User change detected:', { oldUserId, newUserId });
 

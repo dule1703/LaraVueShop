@@ -419,6 +419,62 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   redosled (`authStore.init()` pa `app.mount()`) daje tačnu cenu. Pun suite:
   `php artisan test` (348 passed) + `npm run test` (vitest, 7 passed) +
   `npx vite build` prolaze bez grešaka.
+- ✅ **REŠENO (treći, POVEZAN race u istom `authStore.init()`, otkriven pri
+  ručnoj browser proveri Faze 6 — sama gornja popravka ga je uvela, ne
+  redizajn)** — posle gornje popravke, `authStore.init()` se zove PRE
+  `app.mount()`, tj. PRE nego što Inertia-ina `App` komponenta ikad postavi
+  svoj interni `page` ref (to se dešava tek u NJENOM `setup()`-u, TOKOM
+  `app.mount()`). Unutar `init()`, `watch(() => page.props.auth?.user, ...)`
+  je i dalje čitao `usePage()` (za KASNIJE promene, vidi gore) - a Vue-ov
+  `watch()` **sinhrono evaluira getter jednom odmah pri samom pozivu**, radi
+  prikupljanja zavisnosti, bez obzira na `{ immediate: false }`. U tom
+  trenutku je `page.props` `undefined` (Inertia ga još nije postavila), pa
+  `page.props.auth` (bez `?.` posle `props`) baca `TypeError: Cannot read
+  properties of undefined (reading 'auth')`. Taj throw izlazi iz `watch()`-a
+  netaknut jer u tom trenutku ne postoji nijedna Vue komponenta/instance
+  (poziv dolazi iz `createInertiaApp`-ovog plain JS `setup()` callback-a, ne
+  iz komponente) koja bi ga uhvatila preko `errorCaptured`/`app.config.
+  errorHandler` — Vue-ov default `logError` u dev modu tada **baca dalje**
+  (`throwInDev` podrazumevano `true`), što zaustavlja ceo `createInertiaApp`
+  `setup()` PRE poziva `app.mount(el)`. Rezultat: bela prazna strana na
+  **svakom** punom (ne-SPA) učitavanju bilo koje stranice, ne samo na
+  Checkout-u — potpuno nezavisno od Faze 6 (reprodukovano identično na
+  `bc525eb`/`develop`, pre bilo kakvog brendiranja).
+  Popravka: getter promenjen u `page.props?.auth?.user` (dodat `?.` posle
+  `props`) — bezbedno vraća `undefined` dok `page.value` ne bude postavljen,
+  a `watch` ostaje ispravno pretplaćen (čita isti reaktivni `page` ref preko
+  `computed()`-a unutar `usePage()`), pa se okine čim Inertia popuni pravu
+  stranicu.
+  **Drugi, suptilniji problem otkriven pri istoj proveri:** kad se watch prvi
+  put stvarno okine (Inertia popuni `page.props` tokom `app.mount()`),
+  Vue-ova interna "stara vrednost" za watch callback je `undefined` (iz gore
+  opisane bezbedne prve evaluacije) — za VEĆ ulogovanog korisnika na punom
+  reload-u, callback je to tumačio kao tranziciju `null -> user`, tj. lažni
+  **SCENARIO 2 (LOGIN)**, iako se korisnik samo hidrira, ne prijavljuje. To bi
+  na svakom punom reload-u nepotrebno duplo gađalo `/api/cart`, i - gore - da
+  je slučajno postojala zaostala gost-korpa u `localStorage`-u, pogrešno bi
+  je mergovalo (`mergeGuestCartOnLogin()`) u nalog već ulogovanog korisnika na
+  svakom reload-u. Popravka: callback sad poredi `newUserId` protiv
+  `this.previousUserId` (store-ovo sopstveno stanje, već tačno postavljeno iz
+  `initialUser` na početku `init()`-a), ne protiv `watch()`-ovog internog
+  `oldValue` parametra — za već poznatog korisnika ovo sad ispravno pada u
+  SCENARIO 4 (isti korisnik, bez akcije), ne SCENARIO 2.
+  Oba problema reprodukovana i potvrđena u pravom browseru (headless Chrome
+  + CDP, autentikovana sesija preko privremenog test naloga, obrisanog posle
+  provere) — **ne samo automatskim testovima**: stari statički mock
+  `usePage()` u `auth.test.js` (`() => ({ props: { auth: {} } })`) je
+  slučajno sakrio prvi bag jer `page.props` u testu nikad nije bio
+  `undefined`. Mock zamenjen pravim Vue `ref()`-om (počinje kao `undefined`,
+  `__setInertiaPageForTest()` simulira trenutak kad Inertia popuni stranicu
+  tokom `app.mount()`) — sad realno modeluje pravi tajming, i pada na starom
+  getteru identičnim stack trace-om kao u browseru (provereno ručno: vraćen
+  stari getter privremeno, novi testovi pucaju, pa vraćen fix). Testovi:
+  `resources/js/Stores/auth.test.js` (novi `describe` blok "REGRESIJA...").
+  Pun suite (na ovoj, odvojenoj grani - vidi ispod): `php artisan test`,
+  `npm run test` (vitest, 10 passed), `npx vite build` prolaze bez grešaka.
+  **Napomena:** ovaj fix ide u SVOJ PR ka `develop` (ne u Faza 6 brending
+  granu) jer bug postoji nezavisno od redizajna — potvrđeno identičnom
+  reprodukcijom na `bc525eb` (stanje `develop`-a pre Faze 6).
 
 ## Pretraga — ćirilica/latinica (Faza 4)
 - `app/Support/SearchText.php::normalize()` — malo slovo + ćirilica
@@ -566,3 +622,114 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   dodata u centralnu listu — gost/ne-admin provere). Pun suite:
   `php artisan test` (348 passed) + `npm run test` (vitest, 5 passed) +
   `npx vite build` prolaze bez grešaka.
+
+## Dizajn — vizuelni redizajn brenda (Faza 6, korak 1: temelji)
+Bookstore (Faze 0-5) je zatvoren. Redizajn je **nezavisan od backend logike**
+i ide stranicu-po-stranicu; ovaj korak je samo infrastruktura (boje, fontovi,
+logo, brend ime) — building blockovi za sledeće korake. **Nije dirano:**
+sadržaj/layout `Shop.vue`, `Product.vue`, `Cart.vue`, `Checkout.vue`, admin
+stranice, Breeze auth stranice (samo logo/brend ime u `AuthenticatedLayout.vue`
+i `GuestLayout.vue` je zamenjen — to je deo brendiranja, ne redizajna tih
+stranica).
+- **Ime brenda: "Ex Libris"** (bilo "LaraVueShop"/"Laravel"). Izvor je
+  `APP_NAME` env varijabla (`.env`, `.env.example`) — `<title>` u
+  `app.blade.php` i `MAIL_FROM_NAME`/`VITE_APP_NAME` je prate automatski.
+  `PayPalGateway::createOrder` (`brand_name` prikazan na PayPal checkout
+  stranici) je imao odvojen hardkodovan fallback `env('APP_NAME',
+  'LaraVueShop')` — fallback promenjen na `'Ex Libris'` (samo string default,
+  logika kreiranja PayPal porudžbine nije dirana).
+  ✅ **REŠENO (poseban hotfix, posle merge-a Faze 6 — CI je pukao na
+  dotenv parse grešci pre nego što je ovo stiglo da se popravi):**
+  `.env.example` je bio zatečen sa dva spojena bloka env varijabli bez
+  razdvajajućeg newline-a (linija 9: `APP_FAKER_LOCALE=en_USAPP_NAME=...`).
+  Uzrok, potvrđen kroz `git log --follow -p -- .env.example`: commit
+  `2f67387` ("Fix DababaseSeeder class name") je ubacio pravu, prilagođenu
+  konfiguraciju projekta (mysql, `laravue_shop` baza, pravi mail server,
+  PayPal placeholder-i) NASRED originalnog, generičkog Laravel
+  `.env.example` stub-a (iz `Initial commit`) — bez uklanjanja ostatka tog
+  stub-a, koji je ostao zalepljen odmah iza (drugi, potpuno redundantan
+  blok: `sqlite` baza, `log` mailer, generički `hello@example.com`, bez
+  PayPal sekcije — ništa jedinstveno projektu). Kad je Faza 6 menjala
+  `APP_NAME=Laravel` → `APP_NAME="Ex Libris"` preko `replace_all`, promena
+  je ispravno pogodila OBA doslovna pojavljivanja stringa — uključujući ono
+  zalepljeno usred linije 9 — ali dodavanje navodnika oko vrednosti
+  (`"Ex Libris"`, zbog razmaka) je baš na tom mestu učinilo liniju
+  dovoljno "čudnom" da PHP dotenv parser prijavi "Encountered unexpected
+  whitespace" umesto da je tiho (pogrešno) parsira kao ranije.
+  **Popravka:** ceo drugi (redundantan) blok obrisan — zadržan samo prvi,
+  ispravan/prilagođen profil (mysql/pravi mail/PayPal, sad sa
+  `APP_NAME="Ex Libris"` na vrhu), sa urednim newline-om na kraju. Fajl
+  ide sa 135 na 69 linija, 51 ključ (bez duplikata).
+  **Provereno tačno onako kako CI radi**
+  (`.github/workflows/deploy.yml`): `cp .env.example .env` pa pravi
+  `composer install --no-interaction --prefer-dist` (ne samo test env) —
+  `post-autoload-dump` hook pokreće `php artisan package:discover`, što
+  bootuje aplikaciju i parsira `.env`; prošlo bez greške. Dodatno
+  provereno direktno preko `Dotenv\Dotenv::parse()`/`createImmutable()`.
+  Lokalni `.env` (gitignored, nije deo ovog fajla/PR-a) je posle ovog testa
+  vraćen na svoj pravi sadržaj iz backupa - test nije trajno izmenio ništa
+  van `.env.example`.
+- **Paleta** — CSS varijable u `resources/css/app.css` (`:root`, prefiks
+  `--brand-*`, **ne** HSL triplet kao postojeći shadcn `--background`/
+  `--foreground` tokeni, jer je paleta zadata u heksadecimalnom zapisu):
+  `--brand-header-bg: #E4CBAE`, `--brand-header-text: #6B4423`,
+  `--brand-header-text-muted: #9C7A54`, `--brand-accent: #D9713A`,
+  `--brand-accent-hover: #E8935A`, `--brand-page-bg: #FFFCF8` (izabrana
+  topla varijanta ponuđene alternative, ne čisto `#FFFFFF`),
+  `--brand-card-bg: #F6EEE3`, `--brand-text-primary: #2E241C`,
+  `--brand-text-secondary: #8A7461`. Samo u `:root` — **nema** `.dark`
+  varijante (brend boje su za sada fiksne, dark mode za shop nije dizajniran).
+  U `tailwind.config.js` mapirane pod `colors.brand` (namerno **odvojeno** od
+  postojećeg shadcn `accent` tokena da ga ne pregazi — shadcn komponente kad
+  se dodaju i dalje koriste `accent`/`accent-foreground`):
+  `bg-brand-header`, `text-brand-header-text`, `text-brand-header-muted`,
+  `bg-brand-accent`, `hover:bg-brand-accent-hover`, `bg-brand-page`,
+  `bg-brand-card`, `text-brand-text-primary`, `text-brand-text-secondary`.
+  Nijedna postojeća stranica još ne koristi ove klase (samo definisane, čekaju
+  sledeće korake redizajna).
+- **Fontovi** — dodat Google Font **"Lora"** (serif) preko `fonts.bunny.net`
+  (isti CDN/obrazac kao postojeći Figtree, `app.blade.php`: jedan
+  `<link>` sa `family=figtree:400,500,600|lora:400,500,600,700`). Ovo
+  okruženje nema `frontend-design` skill dostupan za CSP proveru — CDN je
+  isti već korišćeni domen (`fonts.bunny.net`), nema postojećeg CSP header-a
+  u aplikaciji koji bi to blokirao (provereno, nema `Content-Security-Policy`
+  nigde u kodu). `tailwind.config.js`: `fontFamily.serif = ['Lora',
+  ...defaultTheme.fontFamily.serif]` (klasa `font-serif`); `fontFamily.sans`
+  (Figtree, telo/dugmad/forme) nije menjan.
+- **Logo** — `resources/js/Components/Logo.vue`. Ikona (linijski crtež,
+  `stroke`, ne `fill`) je lucide-vue-next-ov `BookOpen` (projekat već ima
+  `lucide-vue-next` instaliran i konvenciju "nove komponente koriste lucide",
+  vidi Stack) + wordmark "Ex Libris" u `font-serif` (Lora). Jedan prop,
+  `color` (default `currentColor`) — postavlja CSS `color` na wrapper, ikona
+  nasleđuje preko `stroke="currentColor"` (lucide default), tekst isto preko
+  `color`. Veličina (ikona + tekst) je u `em` jedinicama — skalira se preko
+  `font-size`/Tailwind text-size klase na roditelju (npr. `class="text-xl"`
+  na `<Link>` koji sadrži `<Logo />`), **nema poseban `size` prop** (nije
+  traženo, izbegnuta dodatna površina API-ja). Ovako je ožičen u:
+  - `AuthenticatedLayout.vue` (header, `Link` sa `class="text-xl text-gray-800"`)
+  - `GuestLayout.vue` (Breeze auth stranice, `Link` sa
+    `class="text-4xl text-gray-500"`) — samo logo/brend zamenjen, layout
+    kartice/forme nije diran.
+  Stari `ApplicationLogo.vue` (img tag ka `public/images/favicon_DD_WebApps.png`,
+  nepovezan raster brend) je **obrisan** zajedno sa slikom — posle zamene
+  nije imao više nijednog korišćenja (provereno grep-om).
+- **Favicon** — `public/favicon.svg` (ista `BookOpen` putanja, `stroke`
+  `#6B4423` = `--brand-header-text`), referenciran u `app.blade.php` kao
+  primarni (`<link rel="icon" type="image/svg+xml">`). Stari `public/favicon.ico`
+  je ostavljen kao `rel="alternate icon"` fallback za stariji browser koji ne
+  podržava SVG favicon — **nije regenerisan** iz nove ikone (ovo okruženje
+  nema ImageMagick/`convert` ni PHP GD ekstenziju, nema alata da se
+  rasterizuje SVG → `.ico`). **Otvoreno:** kad bude dostupan alat za
+  rasterizaciju, generisati odgovarajući `favicon.ico` iz iste ikone da i
+  stariji browseri dobiju brend, ne generički default.
+- Testirano: `npx vite build`, `npm run test` (vitest) i `php artisan test`
+  prolaze bez grešaka; `Logo.vue` proveren vizuelno u oba konteksta (svetla
+  pozadina header-a, svetla pozadina guest kartice — nema još tamne pozadine
+  gde bi se testirao `color` prop na drugačijem primeru).
+
+### Planirano/otvoreno
+- Kad se bude radio redizajn Cart/Checkout stranice, tada dodati i
+  funkcionalnost sačuvanih adresa: `addresses` tabela, predpopunjavanje
+  checkout forme za ulogovane korisnike, checkbox "sačuvaj kao podrazumevanu
+  adresu", profile stranica dobija sekciju za upravljanje adresama. **Ne
+  raditi sada** — samo zabeleženo da ne bude zaboravljeno kad dođe taj korak.

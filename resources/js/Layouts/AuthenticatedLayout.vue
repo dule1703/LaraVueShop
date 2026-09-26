@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import { useCartStore } from '@/Stores/cart';
-import ApplicationLogo from '@/Components/ApplicationLogo.vue';
+import Logo from '@/Components/Logo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
@@ -24,8 +24,8 @@ const cart = useCartStore();
             <div class="flex">
               <!-- Logo -->
               <div class="flex shrink-0 items-center">
-                <Link :href="route('home')">
-                  <ApplicationLogo class="block h-9 w-auto fill-current text-gray-800" />
+                <Link :href="route('home')" class="text-xl text-gray-800">
+                  <Logo />
                 </Link>
               </div>
               <!-- Navigation Links -->
