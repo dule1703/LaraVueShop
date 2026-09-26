@@ -566,3 +566,89 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   dodata u centralnu listu — gost/ne-admin provere). Pun suite:
   `php artisan test` (348 passed) + `npm run test` (vitest, 5 passed) +
   `npx vite build` prolaze bez grešaka.
+
+## Dizajn — vizuelni redizajn brenda (Faza 6, korak 1: temelji)
+Bookstore (Faze 0-5) je zatvoren. Redizajn je **nezavisan od backend logike**
+i ide stranicu-po-stranicu; ovaj korak je samo infrastruktura (boje, fontovi,
+logo, brend ime) — building blockovi za sledeće korake. **Nije dirano:**
+sadržaj/layout `Shop.vue`, `Product.vue`, `Cart.vue`, `Checkout.vue`, admin
+stranice, Breeze auth stranice (samo logo/brend ime u `AuthenticatedLayout.vue`
+i `GuestLayout.vue` je zamenjen — to je deo brendiranja, ne redizajna tih
+stranica).
+- **Ime brenda: "Ex Libris"** (bilo "LaraVueShop"/"Laravel"). Izvor je
+  `APP_NAME` env varijabla (`.env`, `.env.example`) — `<title>` u
+  `app.blade.php` i `MAIL_FROM_NAME`/`VITE_APP_NAME` je prate automatski.
+  `PayPalGateway::createOrder` (`brand_name` prikazan na PayPal checkout
+  stranici) je imao odvojen hardkodovan fallback `env('APP_NAME',
+  'LaraVueShop')` — fallback promenjen na `'Ex Libris'` (samo string default,
+  logika kreiranja PayPal porudžbine nije dirana).
+  **Napomena (van opsega ovog koraka):** `.env.example` je zatečen sa dva
+  spojena bloka env varijabli bez razdvajajućeg newline-a (linija 9:
+  `APP_FAKER_LOCALE=en_USAPP_NAME=Laravel` — efektivno dva puta ceo template,
+  mysql pa sqlite konfiguracija). Ime brenda je ažurirano na oba mesta gde se
+  pojavljuje, ali sama duplikacija/malformisan fajl nije popravljena (nije
+  vezano za redizajn, treba posebno rešiti).
+- **Paleta** — CSS varijable u `resources/css/app.css` (`:root`, prefiks
+  `--brand-*`, **ne** HSL triplet kao postojeći shadcn `--background`/
+  `--foreground` tokeni, jer je paleta zadata u heksadecimalnom zapisu):
+  `--brand-header-bg: #E4CBAE`, `--brand-header-text: #6B4423`,
+  `--brand-header-text-muted: #9C7A54`, `--brand-accent: #D9713A`,
+  `--brand-accent-hover: #E8935A`, `--brand-page-bg: #FFFCF8` (izabrana
+  topla varijanta ponuđene alternative, ne čisto `#FFFFFF`),
+  `--brand-card-bg: #F6EEE3`, `--brand-text-primary: #2E241C`,
+  `--brand-text-secondary: #8A7461`. Samo u `:root` — **nema** `.dark`
+  varijante (brend boje su za sada fiksne, dark mode za shop nije dizajniran).
+  U `tailwind.config.js` mapirane pod `colors.brand` (namerno **odvojeno** od
+  postojećeg shadcn `accent` tokena da ga ne pregazi — shadcn komponente kad
+  se dodaju i dalje koriste `accent`/`accent-foreground`):
+  `bg-brand-header`, `text-brand-header-text`, `text-brand-header-muted`,
+  `bg-brand-accent`, `hover:bg-brand-accent-hover`, `bg-brand-page`,
+  `bg-brand-card`, `text-brand-text-primary`, `text-brand-text-secondary`.
+  Nijedna postojeća stranica još ne koristi ove klase (samo definisane, čekaju
+  sledeće korake redizajna).
+- **Fontovi** — dodat Google Font **"Lora"** (serif) preko `fonts.bunny.net`
+  (isti CDN/obrazac kao postojeći Figtree, `app.blade.php`: jedan
+  `<link>` sa `family=figtree:400,500,600|lora:400,500,600,700`). Ovo
+  okruženje nema `frontend-design` skill dostupan za CSP proveru — CDN je
+  isti već korišćeni domen (`fonts.bunny.net`), nema postojećeg CSP header-a
+  u aplikaciji koji bi to blokirao (provereno, nema `Content-Security-Policy`
+  nigde u kodu). `tailwind.config.js`: `fontFamily.serif = ['Lora',
+  ...defaultTheme.fontFamily.serif]` (klasa `font-serif`); `fontFamily.sans`
+  (Figtree, telo/dugmad/forme) nije menjan.
+- **Logo** — `resources/js/Components/Logo.vue`. Ikona (linijski crtež,
+  `stroke`, ne `fill`) je lucide-vue-next-ov `BookOpen` (projekat već ima
+  `lucide-vue-next` instaliran i konvenciju "nove komponente koriste lucide",
+  vidi Stack) + wordmark "Ex Libris" u `font-serif` (Lora). Jedan prop,
+  `color` (default `currentColor`) — postavlja CSS `color` na wrapper, ikona
+  nasleđuje preko `stroke="currentColor"` (lucide default), tekst isto preko
+  `color`. Veličina (ikona + tekst) je u `em` jedinicama — skalira se preko
+  `font-size`/Tailwind text-size klase na roditelju (npr. `class="text-xl"`
+  na `<Link>` koji sadrži `<Logo />`), **nema poseban `size` prop** (nije
+  traženo, izbegnuta dodatna površina API-ja). Ovako je ožičen u:
+  - `AuthenticatedLayout.vue` (header, `Link` sa `class="text-xl text-gray-800"`)
+  - `GuestLayout.vue` (Breeze auth stranice, `Link` sa
+    `class="text-4xl text-gray-500"`) — samo logo/brend zamenjen, layout
+    kartice/forme nije diran.
+  Stari `ApplicationLogo.vue` (img tag ka `public/images/favicon_DD_WebApps.png`,
+  nepovezan raster brend) je **obrisan** zajedno sa slikom — posle zamene
+  nije imao više nijednog korišćenja (provereno grep-om).
+- **Favicon** — `public/favicon.svg` (ista `BookOpen` putanja, `stroke`
+  `#6B4423` = `--brand-header-text`), referenciran u `app.blade.php` kao
+  primarni (`<link rel="icon" type="image/svg+xml">`). Stari `public/favicon.ico`
+  je ostavljen kao `rel="alternate icon"` fallback za stariji browser koji ne
+  podržava SVG favicon — **nije regenerisan** iz nove ikone (ovo okruženje
+  nema ImageMagick/`convert` ni PHP GD ekstenziju, nema alata da se
+  rasterizuje SVG → `.ico`). **Otvoreno:** kad bude dostupan alat za
+  rasterizaciju, generisati odgovarajući `favicon.ico` iz iste ikone da i
+  stariji browseri dobiju brend, ne generički default.
+- Testirano: `npx vite build`, `npm run test` (vitest) i `php artisan test`
+  prolaze bez grešaka; `Logo.vue` proveren vizuelno u oba konteksta (svetla
+  pozadina header-a, svetla pozadina guest kartice — nema još tamne pozadine
+  gde bi se testirao `color` prop na drugačijem primeru).
+
+### Planirano/otvoreno
+- Kad se bude radio redizajn Cart/Checkout stranice, tada dodati i
+  funkcionalnost sačuvanih adresa: `addresses` tabela, predpopunjavanje
+  checkout forme za ulogovane korisnike, checkbox "sačuvaj kao podrazumevanu
+  adresu", profile stranica dobija sekciju za upravljanje adresama. **Ne
+  raditi sada** — samo zabeleženo da ne bude zaboravljeno kad dođe taj korak.
