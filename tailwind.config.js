@@ -17,6 +17,10 @@ export default {
     			sans: [
     				'Figtree',
                     ...defaultTheme.fontFamily.sans
+                ],
+    			serif: [
+    				'Lora',
+                    ...defaultTheme.fontFamily.serif
                 ]
     		},
     		borderRadius: {
@@ -64,6 +68,23 @@ export default {
     				'3': 'hsl(var(--chart-3))',
     				'4': 'hsl(var(--chart-4))',
     				'5': 'hsl(var(--chart-5))'
+    			},
+    			brand: {
+    				header: {
+    					DEFAULT: 'var(--brand-header-bg)',
+    					text: 'var(--brand-header-text)',
+    					muted: 'var(--brand-header-text-muted)'
+    				},
+    				accent: {
+    					DEFAULT: 'var(--brand-accent)',
+    					hover: 'var(--brand-accent-hover)'
+    				},
+    				page: 'var(--brand-page-bg)',
+    				card: 'var(--brand-card-bg)',
+    				text: {
+    					primary: 'var(--brand-text-primary)',
+    					secondary: 'var(--brand-text-secondary)'
+    				}
     			}
     		}
     	}
