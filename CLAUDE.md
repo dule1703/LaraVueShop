@@ -419,6 +419,62 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
   redosled (`authStore.init()` pa `app.mount()`) daje tačnu cenu. Pun suite:
   `php artisan test` (348 passed) + `npm run test` (vitest, 7 passed) +
   `npx vite build` prolaze bez grešaka.
+- ✅ **REŠENO (treći, POVEZAN race u istom `authStore.init()`, otkriven pri
+  ručnoj browser proveri Faze 6 — sama gornja popravka ga je uvela, ne
+  redizajn)** — posle gornje popravke, `authStore.init()` se zove PRE
+  `app.mount()`, tj. PRE nego što Inertia-ina `App` komponenta ikad postavi
+  svoj interni `page` ref (to se dešava tek u NJENOM `setup()`-u, TOKOM
+  `app.mount()`). Unutar `init()`, `watch(() => page.props.auth?.user, ...)`
+  je i dalje čitao `usePage()` (za KASNIJE promene, vidi gore) - a Vue-ov
+  `watch()` **sinhrono evaluira getter jednom odmah pri samom pozivu**, radi
+  prikupljanja zavisnosti, bez obzira na `{ immediate: false }`. U tom
+  trenutku je `page.props` `undefined` (Inertia ga još nije postavila), pa
+  `page.props.auth` (bez `?.` posle `props`) baca `TypeError: Cannot read
+  properties of undefined (reading 'auth')`. Taj throw izlazi iz `watch()`-a
+  netaknut jer u tom trenutku ne postoji nijedna Vue komponenta/instance
+  (poziv dolazi iz `createInertiaApp`-ovog plain JS `setup()` callback-a, ne
+  iz komponente) koja bi ga uhvatila preko `errorCaptured`/`app.config.
+  errorHandler` — Vue-ov default `logError` u dev modu tada **baca dalje**
+  (`throwInDev` podrazumevano `true`), što zaustavlja ceo `createInertiaApp`
+  `setup()` PRE poziva `app.mount(el)`. Rezultat: bela prazna strana na
+  **svakom** punom (ne-SPA) učitavanju bilo koje stranice, ne samo na
+  Checkout-u — potpuno nezavisno od Faze 6 (reprodukovano identično na
+  `bc525eb`/`develop`, pre bilo kakvog brendiranja).
+  Popravka: getter promenjen u `page.props?.auth?.user` (dodat `?.` posle
+  `props`) — bezbedno vraća `undefined` dok `page.value` ne bude postavljen,
+  a `watch` ostaje ispravno pretplaćen (čita isti reaktivni `page` ref preko
+  `computed()`-a unutar `usePage()`), pa se okine čim Inertia popuni pravu
+  stranicu.
+  **Drugi, suptilniji problem otkriven pri istoj proveri:** kad se watch prvi
+  put stvarno okine (Inertia popuni `page.props` tokom `app.mount()`),
+  Vue-ova interna "stara vrednost" za watch callback je `undefined` (iz gore
+  opisane bezbedne prve evaluacije) — za VEĆ ulogovanog korisnika na punom
+  reload-u, callback je to tumačio kao tranziciju `null -> user`, tj. lažni
+  **SCENARIO 2 (LOGIN)**, iako se korisnik samo hidrira, ne prijavljuje. To bi
+  na svakom punom reload-u nepotrebno duplo gađalo `/api/cart`, i - gore - da
+  je slučajno postojala zaostala gost-korpa u `localStorage`-u, pogrešno bi
+  je mergovalo (`mergeGuestCartOnLogin()`) u nalog već ulogovanog korisnika na
+  svakom reload-u. Popravka: callback sad poredi `newUserId` protiv
+  `this.previousUserId` (store-ovo sopstveno stanje, već tačno postavljeno iz
+  `initialUser` na početku `init()`-a), ne protiv `watch()`-ovog internog
+  `oldValue` parametra — za već poznatog korisnika ovo sad ispravno pada u
+  SCENARIO 4 (isti korisnik, bez akcije), ne SCENARIO 2.
+  Oba problema reprodukovana i potvrđena u pravom browseru (headless Chrome
+  + CDP, autentikovana sesija preko privremenog test naloga, obrisanog posle
+  provere) — **ne samo automatskim testovima**: stari statički mock
+  `usePage()` u `auth.test.js` (`() => ({ props: { auth: {} } })`) je
+  slučajno sakrio prvi bag jer `page.props` u testu nikad nije bio
+  `undefined`. Mock zamenjen pravim Vue `ref()`-om (počinje kao `undefined`,
+  `__setInertiaPageForTest()` simulira trenutak kad Inertia popuni stranicu
+  tokom `app.mount()`) — sad realno modeluje pravi tajming, i pada na starom
+  getteru identičnim stack trace-om kao u browseru (provereno ručno: vraćen
+  stari getter privremeno, novi testovi pucaju, pa vraćen fix). Testovi:
+  `resources/js/Stores/auth.test.js` (novi `describe` blok "REGRESIJA...").
+  Pun suite (na ovoj, odvojenoj grani - vidi ispod): `php artisan test`,
+  `npm run test` (vitest, 10 passed), `npx vite build` prolaze bez grešaka.
+  **Napomena:** ovaj fix ide u SVOJ PR ka `develop` (ne u Faza 6 brending
+  granu) jer bug postoji nezavisno od redizajna — potvrđeno identičnom
+  reprodukcijom na `bc525eb` (stanje `develop`-a pre Faze 6).
 
 ## Pretraga — ćirilica/latinica (Faza 4)
 - `app/Support/SearchText.php::normalize()` — malo slovo + ćirilica
