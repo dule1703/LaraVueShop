@@ -10,9 +10,20 @@ export const useAuthStore = defineStore('auth', {
   }),
   
   actions: {
-    init() {
+    /**
+     * initialUser mora doći sinhrono od strane pozivaoca (initialPage.props.auth.user
+     * iz createInertiaApp-ovog setup()-a), NE iz usePage() ovde. usePage() čita
+     * modul-level `page` ref koji Inertia-in App komponenta popuni tek u sopstvenom
+     * setup()-u, tj. TOKOM app.mount() - a to je POSLE što se stranica (Cart.vue/
+     * Checkout.vue) već sinhrono mount-ovala i pozvala cart.loadFromBackend(). Ako bi
+     * init() zvao app.js POSLE app.mount(), authStore.user bi u tom trenutku i dalje
+     * bio null i ulogovan korisnik bi na svakom punom (ne-SPA) učitavanju stranice bio
+     * pogrešno tretiran kao gost (korpa bi se učitala iz praznog/zastarelog
+     * localStorage-a umesto sa servera). Vidi app.js.
+     */
+    init(initialUser = null) {
       const page = usePage();
-      this.user = page.props.auth?.user || null;
+      this.user = initialUser;
       this.previousUserId = this.user?.id || null;
 
       // Watch za promene korisnika
