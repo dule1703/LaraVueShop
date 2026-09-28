@@ -818,14 +818,27 @@ početnu stranicu.
   profitira od shadcn Table/Form komponenti).
 - **`BookCoverPlaceholder.vue`** (nova, `resources/js/Components/Catalog/`) —
   generiše tipografski placeholder kad `image` nije prisutna: naslov u
-  `font-serif` (Lora), autor ispod u `brand-text-secondary`, tanak dekorativni
-  okvir. Pozadina se **deterministički** bira iz jednostavnog hash-a naslova
-  (`hash % 6`) nad palettom od 6 toplih nijansi (`#F6EEE3` `#EAD9C5`
-  `#E4CBAE` `#D9C2A6` `#C9AD8F` `#DDCFC0`) — ista knjiga uvek dobija istu
-  boju, susedne kartice u gridu variraju. Kad `image` postoji, prikazuje se
-  slika umesto placeholder-a (isti prop-interfejs za oba slučaja). Koristi je
-  i `BookCard.vue` (Shop grid) i `Product.vue` (detalj knjige) — jedna
+  `font-serif` (Lora), autor ispod, tanak dekorativni okvir. Pozadina se
+  **deterministički** bira iz jednostavnog hash-a naslova (`hash % 6`) nad
+  palettom od 6 toplih nijansi (`#F6EEE3` `#EAD9C5` `#E4CBAE` `#D9C2A6`
+  `#C9AD8F` `#DDCFC0`) — ista knjiga uvek dobija istu boju, susedne kartice
+  u gridu variraju. Kad `image` postoji, prikazuje se slika umesto
+  placeholder-a (isti prop-interfejs za oba slučaja). Koristi je i
+  `BookCard.vue` (Shop grid) i `Product.vue` (detalj knjige) — jedna
   komponenta, bez duplirane placeholder logike.
+  ✅ **REŠENO (kontrast autora, posle code review-a)** — autor je prvobitno
+  bio `text-brand-text-secondary` (#8A7461). Izračunat WCAG kontrast te boje
+  protiv svih 6 nijansi palete: **2.08:1–3.84:1** — nijedna ne dostiže AA
+  4.5:1, čak ni najsvetlija (`#F6EEE3`, 3.84:1). Probano i
+  `brand-header-text` (#6B4423): prolazi na 5 od 6, ali pada na 3.98:1 na
+  najtamnijoj (`#C9AD8F`). Umesto brisanja dve najtamnije nijanse (čime bi
+  paleta izgubila varijaciju), autor je prebačen na **`text-brand-text-primary`
+  (#2E241C, ista boja kao naslov)** — prolazi **7.1:1–13.2:1** na svih 6,
+  sa udobnom marginom. Naslov i autor se i dalje vizuelno razlikuju preko
+  veličine/težine/kurziva (`font-serif font-semibold` naslov vs. `italic`
+  autor), ne preko boje — validan tipografski obrazac (isti "mastilo",
+  hijerarhija preko stila), i mnogo pouzdaniji od oslanjanja na sekundarnu
+  boju koja se menja preko 6 različitih pozadina.
   **Napomena o Tailwind opacity modifikatoru:** `brand-*` tokeni su
   definisani kao plain hex string preko CSS varijable (`'var(--brand-x)'`),
   ne kao Tailwind-ova `withOpacityValue` funkcija (koja bi trebalo da bude
@@ -848,7 +861,20 @@ početnu stranicu.
   Root kartice je **plain `<div>`, ne `<Link>`** (za razliku od stare
   verzije) — cena/dugme su van `<Link>`-a koji obavija samo koricu i naslov,
   da dugme unutar linka ne bude ugnježdeni interaktivni element (nevalidan
-  HTML, i click bi bubble-ovao u navigaciju). **Backend dodatak (minimalan,
+  HTML, i click bi bubble-ovao u navigaciju). `<Link>` oko korice ima
+  `tabindex="-1" aria-hidden="true"` (dodato posle code review-a) — naslov
+  ispod korice je zaseban `<Link>` na isto odredište, pa bi bez ovoga Tab
+  red imao dva uzastopna stop-a za istu destinaciju po kartici; korica sad
+  nije fokusibilna niti je vidi screen reader, naslov ostaje jedini
+  pristupačni put do `/knjiga/{slug}`.
+  **"Dodato ✓" stanje (posle code review-a)** — klik na "U korpu" (pored
+  `cart.addItem`) postavlja `justAdded = true` na 1.5s, dugme u tom prozoru
+  prikazuje "Dodato ✓" umesto "U korpu". Dugme **nije onemogućeno** dok se
+  to stanje prikazuje — ponovni klik odmah dodaje još jedan primerak i samo
+  resetuje tajmer (`clearTimeout` + novi `setTimeout`), ne blokira. Vizuelno/
+  programski potvrđeno (headless Chrome + CDP): tekst se menja odmah po
+  kliku, vraća se na "U korpu" posle ~1.7s, i odmah reaguje na sledeći klik.
+  **Backend dodatak (minimalan,
   nužan za ovaj UI):** `CatalogController::card()` do sada nije slao
   `product_id` u Shop listing payload-u (samo `Product::detail()` za
   Product.vue ga je imao) — dodato `'product_id' => $product->id` (podatak
@@ -863,16 +889,44 @@ početnu stranicu.
   `brand-*` tokenima. **Mobilni (`< md`)**: dugme "Filteri" (sa tačkicom kad
   ima aktivnih filtera) otvara **`fixed` drawer sa desne strane** (ne
   accordion koji gura sadržaj) + potamnjeni overlay preko cele stranice,
-  zatvara se na X, klik na overlay, ili "Prikaži rezultate". **Bez
-  `<Teleport>`** — drawer (`fixed`, `z-50`) je DOM-ski POSLE `<nav>`
-  (`sticky`, `z-50`) unutar `AuthenticatedLayout`-a; kod jednakih z-index
-  vrednosti CSS iscrtava kasniji DOM element iznad, pa drawer ispravno
-  prekriva nav bez ikakvog dodatnog mehanizma (provereno vizuelno — nav je
-  vidljivo zatamnjen ispod overlay-a kad je drawer otvoren). Breakpoint
-  promenjen sa starog `lg:` na `md:` (tačno kako je traženo — "< md
-  breakpoint"). Desktop (`md+`): ista polja, `md:static` bez `fixed`/overlay
-  klasa (isti markup, samo druge klase na istom wrapper `<div>`-u — nema
-  duplog filter markup-a).
+  zatvara se na X, klik na overlay, "Prikaži rezultate", ili **Escape**.
+  ✅ **REŠENO (ispravka posle code review-a — prvobitna verzija BEZ
+  `<Teleport>`-a je bila lomljiva)**: overlay + drawer su sad u
+  `<Teleport to="body" :disabled="isDesktopFilters">`. Prvobitno rešenje se
+  oslanjalo na to da CSS kod jednakih `z-index` vrednosti (i overlay/drawer i
+  `<nav>` su `z-50`) iscrtava kasniji DOM element iznad — radilo je, ali
+  krhko (zavisi od budućih izmena redosleda markup-a u
+  `AuthenticatedLayout`-u ili uvođenja stacking konteksta između njih, npr.
+  `transform`/`filter` na nekom ancestor-u, što bi tiho pokvarilo prekrivanje
+  bez ikakve greške u konzoli). `<Teleport>` premešta overlay+drawer direktno
+  u `<body>`, van `<nav>`-ovog stacking konteksta — pouzdano bez obzira na
+  DOM redosled unutar layout-a. **Teleport se ne može bezuslovno uključiti**:
+  ista `<div>` se koristi i kao desktop statična kolona u `md:grid`-u, pa bi
+  bezuslovan Teleport premestio panel u `<body>` i na desktopu, izbacujući ga
+  iz grid layout-a (broken desktop). Rešeno preko `isDesktopFilters`
+  (`ref`, prati `window.matchMedia('(min-width: 768px)')`) — Teleport je
+  `:disabled="isDesktopFilters"`, tj. **isključen na desktopu** (panel ostaje
+  in-place u gridu, kako je i bio) i **uključen na mobilnom** (panel
+  teleportovan u `<body>`). `role="dialog"`/`aria-modal="true"` su takođe
+  uslovljeni istim `isDesktopFilters` (odsutni na desktopu — na statičnoj
+  koloni ta ARIA semantika ne bi bila tačna, tamo to nije dijalog).
+  `invisible md:visible` (na `md:` uvek visible, na mobilnom `invisible` kad
+  je zatvoren) sprečava da zatvoren (van ekrana, `translate-x-full`) drawer
+  ostane fokusibilan Tab-om ili vidljiv screen reader-u — CSS transform sam
+  po sebi ne uklanja element iz accessibility stabla/tab reda, `visibility:
+  hidden` uklanja. Escape zatvara drawer (`keydown` listener na
+  `document`, uklonjen u `onUnmounted`).
+  Provereno vizuelno i programski (headless Chrome + CDP): na mobilnom
+  (390px) `role="dialog"` element i overlay su potvrđeno direktna deca
+  `document.body` posle otvaranja; `document.elementFromPoint()` na
+  koordinatama nav-a (i unutar i van širine samog drawer panela) pogađa
+  overlay, ne nav ispod njega — nav je stvarno neklikabilan dok je drawer
+  otvoren, ne samo vizuelno zatamnjen. Na desktopu (1400px) filter kolona je
+  i dalje unutar `.md\:grid` kontejnera (nije teleportovana) — layout
+  identičan kao pre ove izmene. Breakpoint ostaje `md:` (kako je traženo —
+  "< md breakpoint"). Desktop (`md+`): ista polja, `md:static` bez
+  `fixed`/overlay klasa (isti markup, samo druge klase na istom wrapper
+  `<div>`-u — nema duplog filter markup-a).
 - **`Product.vue`** — 2 kolone na `md+` (korice `md:col-span-2`, detalji
   `md:col-span-3`), 1 kolona ispod toga. Naslov `font-serif`, autori sa
   ulogama (pisci odvojeno od prevodilaca/ilustratora, kao i ranije),
@@ -884,18 +938,59 @@ početnu stranicu.
   tekst) + `whitespace-nowrap` na dugme.
 - **`Pagination.vue`** — samo boje (`indigo-600` aktivna stranica →
   `brand-accent`), logika/struktura linkova nedirana.
-- Testirano: `npx vite build`, `npm run test` (vitest, 10 passed),
-  `php artisan test` (348 passed, uključujući `ShopCatalogTest`/
-  `BookDetailTest` bez izmena — oba su čisto Inertia-prop bazirana, ne
-  proveravaju render-ovani markup, pa promena izgleda nije mogla da ih
-  pokvari). Vizuelno provereno (headless Chrome + CDP screenshot,
+- **Prvi pravi vitest testovi za `.vue` SFC komponente** (do sad je vitest
+  testirao samo plain `.js` Pinia store-ove — `auth.test.js`/`cart.test.js`).
+  Dva preduslova koja su nedostajala:
+  - `vitest.config.js` nije imao `vue()` plugin (samo `vite.config.js`, za
+    pravi build) — bez njega vitest ne zna da kompajlira `.vue` import.
+    Dodat `@vitejs/plugin-vue` (već je bio zavisnost projekta, samo nije bio
+    ožičen za test config).
+  - `@vue/test-utils` **nije bio instaliran** — dodat kao devDependency
+    (`npm install --save-dev @vue/test-utils --legacy-peer-deps`; isti
+    `--legacy-peer-deps` razlog kao i za `npm install`, vidi Stack).
+  - `route()` unutar mount-ovanog `<template>`-a kompajlira se kao
+    `_ctx.route(...)`, ne kao referenca na `globalThis.route` (obrazac koji
+    `auth.test.js` koristi, ali taj fajl nikad ne mount-uje pravi SFC
+    `<template>`, samo ručno pisane render funkcije) — mora ići kroz
+    `global.mocks: { route: ... }` (vue-test-utils API), inače
+    `TypeError: _ctx.route is not a function`.
+  - `resources/js/Components/Catalog/BookCoverPlaceholder.test.js` — ista
+    boja za isti naslov (dva odvojena mount-a, isti title), `<img>` kad
+    postoji `image` prop (bez tipografskog teksta), placeholder tekst
+    (naslov+autor) kad `image` nedostaje.
+  - `resources/js/Components/Catalog/BookCard.test.js` — dugme omogućeno za
+    `available: true, stock: 5`; onemogućeno za `available: false`;
+    onemogućeno za `stock: null` (e-knjiga); klik na omogućeno dugme menja
+    tekst u "Dodato ✓" i ne zove `axios.post` za gosta (`syncWithBackend` se
+    tiho preskače bez `authStore.user`).
+- Testirano: `npx vite build`, `npm run test` (vitest, **17 passed** — 10
+  postojećih + 3 `BookCoverPlaceholder` + 4 `BookCard`), `php artisan test`
+  (348 passed, uključujući `ShopCatalogTest`/`BookDetailTest` bez izmena —
+  oba su čisto Inertia-prop bazirana, ne proveravaju render-ovani markup, pa
+  promena izgleda nije mogla da ih pokvari). Vizuelno i programski provereno
+  (headless Chrome + CDP screenshot + `Runtime.evaluate`/`elementFromPoint`,
   desktop 1400px i mobilni 390px emulacija): Shop grid (uključujući
-  "U korpu" na kartici), Product stranica, i knjiga sa `stock = 0`
+  "U korpu" → "Dodato ✓" na kartici), Product stranica, knjiga sa `stock = 0`
   (onemogućeno dugme na kartici i na Product stranici, "Nema na stanju"
   crveno) — privremeno postavljeno na realnoj dev knjizi (`na-drini-cuprija`)
   preko tinker-a i **vraćeno na `stock = 10`** posle provere. Mobilni filter
-  drawer testiran otvoren/zatvoren. Konzola bez grešaka na svim proverenim
-  stranicama.
+  drawer: otvoren/zatvoren, Escape zatvara, `role="dialog"` element i overlay
+  potvrđeno teleportovani direktno pod `document.body`, `elementFromPoint()`
+  potvrđuje da nav NIJE klikabilan (ni deo koji drawer panel fizički ne
+  pokriva) dok je drawer otvoren, desktop filter kolona ostaje unutar
+  `.md:grid` kontejnera (layout identičan kao pre Teleport ispravke).
+  Konzola bez grešaka na svim proverenim stranicama.
+- **CI nalaz (prijavljeno, workflow NIJE menjan bez odobrenja):** PR-ovi
+  (uključujući ovaj) nemaju check run-ove jer `.github/workflows/deploy.yml`
+  ima `on: push: branches: [main, develop]` — **nema `pull_request` trigger
+  uopšte**. Workflow se pokreće tek POSLE merge-a (push na `develop`/`main`
+  koji nastaje od merge commit-a), nikad na sam otvoren PR. Ovo je
+  pre-postojeće stanje (proverено, isto važi za sve dosadašnje PR-ove ove
+  faze), ne nešto što je ovaj korak pokvario. Ako se želi da testovi prođu
+  PRE merge-a (vidljivo na samom PR-u), workflow treba i `pull_request`
+  trigger — to zahteva odluku (npr. da li `build-and-deploy`/`notify` job-ovi
+  treba da se preskoče za PR-eve, samo `tests` job da se pokrene) i eksplicitno
+  odobrenje pre izmene.
 
 ### Planirano/otvoreno
 - Kad se bude radio redizajn Cart/Checkout stranice, tada dodati i

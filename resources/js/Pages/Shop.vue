@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import BookCard from '@/Components/Catalog/BookCard.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { formatLabels, languageLabel, scriptLabels } from '@/lib/bookLabels';
 
 const props = defineProps({
@@ -17,6 +17,24 @@ const PRICE_DEBOUNCE_MS = 400;
 const form = reactive({ ...props.filters });
 const showFilters = ref(false);
 let debounceTimer = null;
+
+// `md:` breakpoint (Tailwind default 768px) — na desktopu filter panel MORA
+// ostati u toku dokumenta (statična kolona u md:grid-u), pa se tamo Teleport
+// isključuje preko `:disabled`; samo na mobilnom se stvarno teleportuje u
+// <body> kao overlay/drawer. Bez ovoga bi Teleport uvek premestio panel u
+// <body>, i na desktopu bi nestao iz grid layout-a.
+const isDesktopFilters = ref(true);
+let filtersMql = null;
+
+function syncIsDesktopFilters(e) {
+    isDesktopFilters.value = e.matches;
+}
+
+onMounted(() => {
+    filtersMql = window.matchMedia('(min-width: 768px)');
+    isDesktopFilters.value = filtersMql.matches;
+    filtersMql.addEventListener('change', syncIsDesktopFilters);
+});
 
 // Back/forward i "Poništi filtere" menjaju props bez remount-a komponente.
 watch(() => props.filters, (filters) => Object.assign(form, filters));
@@ -49,6 +67,18 @@ function applyAndClose() {
 function categoryLabel(category) {
     return String.fromCharCode(160).repeat(category.depth * 2) + category.name;
 }
+
+function closeOnEscape(e) {
+    if (e.key === 'Escape' && showFilters.value) {
+        showFilters.value = false;
+    }
+}
+
+onMounted(() => document.addEventListener('keydown', closeOnEscape));
+onUnmounted(() => {
+    document.removeEventListener('keydown', closeOnEscape);
+    filtersMql?.removeEventListener('change', syncIsDesktopFilters);
+});
 </script>
 
 <template>
@@ -84,12 +114,15 @@ function categoryLabel(category) {
                 </div>
 
                 <div class="md:grid md:grid-cols-4 md:gap-8">
-                    <!-- Desktop (md+): obična statična bočna kolona. Mobilni (< md): isti markup/
-                         v-model veze na `form`, ali `fixed` drawer sa desne strane + tamni overlay.
-                         Nav traka je `position: sticky` sa z-50 na istom (root) stacking nivou;
-                         drawer takođe z-50 ali je DOM-ski POSLE nav-a (unutar <main>), pa po CSS
-                         pravilima za jednake z-index vrednosti kasniji element u DOM-u iscrtava se
-                         iznad — nema potrebe za Teleport-om da bi drawer prekrio nav kad je otvoren. -->
+                    <!-- Desktop (md+, isDesktopFilters=true): Teleport je DISABLED preko
+                         :disabled — panel ostaje na svom mestu u md:grid-u kao statična kolona
+                         (Teleport ne razlikuje breakpoint-ove sam, mora se ručno isključiti,
+                         inače bi ista <div> uvek završila u <body> i desktop grid bi izgubio
+                         bočnu kolonu). Mobilni (< md): Teleport ENABLED — overlay + drawer se
+                         stvarno premeste u <body>, van AuthenticatedLayout-ovog <nav> stacking
+                         konteksta, pa pouzdano prekrivaju nav bez oslanjanja na DOM redosled/
+                         z-index tie-breaking (raniji pristup bez Teleport-a). -->
+                    <Teleport to="body" :disabled="isDesktopFilters">
                     <Transition
                         enter-active-class="transition-opacity duration-200"
                         enter-from-class="opacity-0"
@@ -98,16 +131,19 @@ function categoryLabel(category) {
                     >
                         <div
                             v-if="showFilters"
-                            class="fixed inset-0 z-40 bg-black/40 md:hidden"
+                            class="fixed inset-0 z-50 bg-black/40 md:hidden"
                             @click="showFilters = false"
                         ></div>
                     </Transition>
 
                     <div
-                        class="space-y-5 overflow-y-auto bg-brand-page p-5 transition-transform duration-300 ease-out md:static md:z-auto md:h-auto md:w-auto md:translate-x-0 md:bg-transparent md:p-0 md:shadow-none md:transition-none"
+                        :role="isDesktopFilters ? undefined : 'dialog'"
+                        :aria-modal="isDesktopFilters ? undefined : 'true'"
+                        aria-label="Filteri"
+                        class="space-y-5 overflow-y-auto bg-brand-page p-5 transition-transform duration-300 ease-out md:visible md:static md:z-auto md:h-auto md:w-auto md:translate-x-0 md:bg-transparent md:p-0 md:shadow-none md:transition-none"
                         :class="showFilters
                             ? 'fixed inset-y-0 right-0 z-50 w-full max-w-xs translate-x-0 shadow-2xl'
-                            : 'fixed inset-y-0 right-0 z-50 w-full max-w-xs translate-x-full shadow-2xl md:translate-x-0'"
+                            : 'invisible fixed inset-y-0 right-0 z-50 w-full max-w-xs translate-x-full shadow-2xl md:translate-x-0'"
                     >
                         <div class="flex items-center justify-between md:hidden">
                             <h2 class="font-serif text-lg font-semibold text-brand-text-primary">Filteri</h2>
@@ -197,6 +233,7 @@ function categoryLabel(category) {
                             Prikaži rezultate
                         </button>
                     </div>
+                    </Teleport>
 
                     <div class="md:col-span-3">
                         <div v-if="books.data.length" class="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6">
