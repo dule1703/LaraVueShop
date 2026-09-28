@@ -1081,9 +1081,19 @@ ovde samo kako sad radi.)
 - **Aktivni filteri kao chip-ovi** (`Shop.vue`, iznad rezultata) — uključujući
   search ("Pretraga: seobe"), × na chip-u uklanja SAMO taj filter,
   "Poništi sve" briše sve. Filter panel: `bg-brand-card` kartica na desktopu
-  (`md:sticky md:top-24`), isti dizajn (grupe, custom `ChevronDown` strelica,
+  (`md:sticky md:top-24 md:max-h-[calc(100vh-7rem)]`, `overflow-y-auto`
+  — panel se ne proteže ispod viewport-a kad su svi filteri aktivni,
+  sam skroluje interno; provereno na 1366×768 da je i poslednja kontrola
+  i dalje dostupna), isti dizajn (grupe, custom `ChevronDown` strelica,
   cena sa € sufiksom) deli mobilni drawer (Teleport/aria iz PR #60
   nepromenjeni).
+  **`removeFilter('price_min'/'price_max')`** (klik na × na cenovnom
+  chip-u) — pored sinhronog `apply()`, `form.price_min`/`price_max`
+  ostaju u debounce watch-u pa bi bez `await nextTick(); clearTimeout(...)`
+  posle `apply()`-a poslao potpuno redundantan drugi, identičan zahtev
+  ~400ms kasnije (potvrđeno testom pre ove ispravke, isti mehanizam kao
+  `syncingFromProps` iznad — watch se ne izvršava sinhrono unutar iste
+  funkcije).
 - **`@tailwindcss/forms` plugin** — bio uvezen u `tailwind.config.js` ali
   NIKAD dodat u `plugins: []` (pre-postojeći propust, otkriven dok "Samo na
   stanju" checkbox nije hteo da postane terakota). Dodat sa **`strategy:
@@ -1093,12 +1103,16 @@ ovde samo kako sad radi.)
   opt-in preko `form-*` klasa; trenutno ima efekta samo na `form-checkbox`
   klasi na "Samo na stanju" checkbox-u, ništa drugo na sajtu nije dirano.
 - Testovi: `resources/js/Components/HeaderSearch.test.js` (7),
-  `resources/js/Pages/Shop.test.js` (8 — regresija search-a + chip-ovi).
-  Feature test za `/shop?search=...` već postoji u
+  `resources/js/Pages/Shop.test.js` (9 — regresija search-a, redundantan
+  apply() i za `props.filters`-sinhro i za `removeFilter()` cene,
+  chip-ovi). Feature test za `/shop?search=...` već postoji u
   `tests/Feature/Catalog/ShopCatalogTest.php` (7 testova) — bug/refaktor su
-  čisto frontend, backend nedirano. `npx vite build`, `npm run test` (32
+  čisto frontend, backend nedirano. `npx vite build`, `npm run test` (33
   passed), `php artisan test` (348 passed) prolaze. Vizuelno provereno
-  (headless Chrome + CDP) na 1400/700/390px sa aktivnim filterima.
+  (headless Chrome + CDP) na 1400/700/390/1366×768px sa aktivnim filterima
+  (poslednje uz stvarni scroll stranice — `position: sticky` se ne
+  "zakači" dok se ne skroluje, provera na scroll=0 daje lažan utisak da
+  panel ne staje u viewport).
 
 ### Planirano/otvoreno
 - Kad se bude radio redizajn Cart/Checkout stranice, tada dodati i

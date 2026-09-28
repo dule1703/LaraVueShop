@@ -136,6 +136,30 @@ describe('Shop.vue — regresija fix/search-sync (DEO A: search živi samo u pro
 
         expect(router.get).not.toHaveBeenCalled();
     });
+
+    it('removeFilter("price_min") preko chip-a NE pravi redundantan drugi apply() ~400ms kasnije', async () => {
+        const wrapper = mountShop({ category: 'romani', price_min: '10' });
+
+        const priceMinChip = wrapper.findAll('button').find((b) => b.attributes('aria-label')?.includes('od 10.00'));
+        expect(priceMinChip).toBeTruthy();
+        await priceMinChip.trigger('click');
+
+        // removeFilter() poziva apply() ODMAH (sinhrono) - prvi (i jedini
+        // ispravan) zahtev.
+        expect(router.get).toHaveBeenCalledTimes(1);
+        const [, paramsFirst] = router.get.mock.calls[0];
+        expect(paramsFirst.price_min).toBeUndefined();
+        expect(paramsFirst.category).toBe('romani');
+
+        // `form.price_min = null` (unutar removeFilter) je i dalje promena
+        // vrednosti koju prati debounce watch (isti watch koji reaguje na
+        // kucanje u polju cene) - bez eksplicitne zaštite, taj watch bi (posle
+        // ovog sinhronog bloka, na sledećem Vue flush-u) zakazao SVOJ setTimeout
+        // i poslao potpuno redundantan drugi identičan zahtev ~400ms kasnije.
+        await new Promise((resolve) => setTimeout(resolve, 450));
+
+        expect(router.get).toHaveBeenCalledTimes(1);
+    });
 });
 
 describe('Shop.vue — aktivni filteri kao chip-ovi (DEO B)', () => {

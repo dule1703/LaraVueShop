@@ -162,13 +162,28 @@ const activeChips = computed(() => Object.entries(props.filters)
     .filter(([, value]) => value !== null && value !== false)
     .map(([key, value]) => ({ key, label: chipLabel[key]?.(value) ?? String(value) })));
 
-function removeFilter(key) {
+async function removeFilter(key) {
     if (key === 'search') {
         router.get(route('shop'), buildParams(true), { preserveState: true, preserveScroll: true, replace: true });
         return;
     }
     form[key] = key === 'in_stock' ? false : null;
     apply();
+
+    // `form.price_min`/`price_max` su i dalje u debounce watch-u (iznad, isti
+    // watch koji reaguje na kucanje u ceni) — ova promena vrednosti (čak i na
+    // `null`) ga i dalje okida, BEZ OBZIRA što je `apply()` upravo sinhrono
+    // poslao ispravan zahtev. `watch()` (podrazumevani `flush: 'pre'`) se ne
+    // izvršava sinhrono unutar ove funkcije, nego na sledećem Vue flush-u —
+    // `await nextTick()` čeka baš do tog trenutka (isti obrazac kao
+    // `syncingFromProps` iznad), pa se `debounceTimer` koji je watch upravo
+    // zakazao odmah otkaže, pre nego što isteknu njegova 400ms. Bez ovoga bi
+    // uklanjanje cenovnog chip-a poslalo potpuno redundantan drugi, identičan
+    // zahtev ~400ms kasnije (potvrđeno testom pre ove ispravke).
+    if (key === 'price_min' || key === 'price_max') {
+        await nextTick();
+        clearTimeout(debounceTimer);
+    }
 }
 
 function closeOnEscape(e) {
@@ -242,7 +257,7 @@ onUnmounted(() => {
                         :role="isDesktopFilters ? undefined : 'dialog'"
                         :aria-modal="isDesktopFilters ? undefined : 'true'"
                         aria-label="Filteri"
-                        class="space-y-6 overflow-y-auto bg-brand-page p-5 transition-transform duration-300 ease-out md:visible md:static md:z-auto md:h-auto md:w-auto md:translate-x-0 md:rounded-2xl md:bg-brand-card md:p-5 md:shadow-none md:transition-none md:sticky md:top-24"
+                        class="space-y-6 overflow-y-auto bg-brand-page p-5 transition-transform duration-300 ease-out md:visible md:static md:z-auto md:h-auto md:w-auto md:translate-x-0 md:rounded-2xl md:bg-brand-card md:p-5 md:shadow-none md:transition-none md:sticky md:top-24 md:max-h-[calc(100vh-7rem)]"
                         :class="showFilters
                             ? 'fixed inset-y-0 right-0 z-50 w-full max-w-xs translate-x-0 shadow-2xl'
                             : 'invisible fixed inset-y-0 right-0 z-50 w-full max-w-xs translate-x-full shadow-2xl md:translate-x-0'"
