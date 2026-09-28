@@ -7,6 +7,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
+import HeaderSearch from '@/Components/HeaderSearch.vue';
 import { Link } from '@inertiajs/vue3';
 
 const page = usePage();
@@ -29,7 +30,7 @@ const cart = useCartStore();
                 </Link>
               </div>
               <!-- Navigation Links -->
-              <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+              <div class="hidden space-x-8 md:-my-px md:ms-10 md:flex">
                 <NavLink :href="route('shop')" :active="route().current('shop')" class="font-semibold">
                   Shop
                 </NavLink>
@@ -38,17 +39,10 @@ const cart = useCartStore();
 
             <!-- Search bar (desktop) -->
             <div class="hidden md:flex flex-1 max-w-xl mx-8 items-center">
-              <div class="relative w-full">
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-3 px-6 pl-12 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
-                />
-                <font-awesome-icon
-                  :icon="['fas', 'search']"
-                  class="absolute left-5 top-1/2 -translate-y-1/2 text-brand-header-muted text-lg"
-                />
-              </div>
+              <HeaderSearch
+                input-class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-3 px-6 pl-12 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
+                icon-class="absolute left-5 top-1/2 -translate-y-1/2 text-brand-header-muted text-lg"
+              />
             </div>
 
             <!-- Right side: Cart + User -->
@@ -84,7 +78,7 @@ const cart = useCartStore();
               </div>
 
               <!-- User Dropdown -->
-              <div v-if="page.props.auth?.user" class="relative ms-3 hidden sm:block">
+              <div v-if="page.props.auth?.user" class="relative ms-3 hidden md:block">
                 <Dropdown align="right" width="48">
                   <template #trigger>
                     <span class="inline-flex rounded-md">
@@ -111,13 +105,13 @@ const cart = useCartStore();
               </div>
 
               <!-- Login / Register -->
-              <div v-else class="hidden sm:flex items-center gap-x-4 text-sm">
+              <div v-else class="hidden md:flex items-center gap-x-4 text-sm">
                 <Link :href="route('login')" class="font-medium text-brand-header-muted hover:text-brand-header-text">Log in</Link>
                 <Link :href="route('register')" class="rounded-2xl bg-brand-accent px-5 py-2.5 font-medium text-white hover:bg-brand-accent-hover transition">Register</Link>
               </div>
 
               <!-- Hamburger -->
-              <div class="-me-2 flex items-center sm:hidden">
+              <div class="-me-2 flex items-center md:hidden">
                 <button
                   @click="showingNavigationDropdown = !showingNavigationDropdown"
                   class="inline-flex items-center justify-center rounded-md p-2 text-brand-header-muted hover:bg-brand-card hover:text-brand-header-text transition"
@@ -133,7 +127,14 @@ const cart = useCartStore();
         </div>
 
         <!-- Responsive Navigation Menu (original structure kept) -->
-        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="sm:hidden border-t border-black/10 bg-brand-header">
+        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="md:hidden border-t border-black/10 bg-brand-header">
+          <div class="px-4 pt-3">
+            <HeaderSearch
+              input-class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-2.5 px-4 pl-11 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
+              icon-class="absolute left-4 top-1/2 -translate-y-1/2 text-brand-header-muted"
+              @submitted="showingNavigationDropdown = false"
+            />
+          </div>
           <div class="space-y-1 pb-3 pt-2 px-4">
             <ResponsiveNavLink :href="route('home')" :active="route().current('home')">
               Home
