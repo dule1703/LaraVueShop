@@ -78,6 +78,12 @@ onMounted(() => document.addEventListener('keydown', closeOnEscape));
 onUnmounted(() => {
     document.removeEventListener('keydown', closeOnEscape);
     filtersMql?.removeEventListener('change', syncIsDesktopFilters);
+    // Pre-postojeći propust (nije uveden ovim PR-om, ali otkriven pri reviziji
+    // istog fajla): bez ovoga bi debounceTimer i dalje pozvao apply() posle
+    // unmount-a (npr. korisnik otkuca cenu pa odmah klikne na knjigu pre
+    // isteka 400ms) - router.get('shop', ...) bi tad tiho prekinuo navigaciju
+    // na koju je korisnik već otišao.
+    clearTimeout(debounceTimer);
 });
 </script>
 

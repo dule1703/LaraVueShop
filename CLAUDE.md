@@ -980,6 +980,19 @@ početnu stranicu.
   pokriva) dok je drawer otvoren, desktop filter kolona ostaje unutar
   `.md:grid` kontejnera (layout identičan kao pre Teleport ispravke).
   Konzola bez grešaka na svim proverenim stranicama.
+- ✅ **REŠENO (cleanup provera, posle pitanja da li se čiste `matchMedia`
+  listener i `setTimeout`-ovi)** — `matchMedia` listener (`isDesktopFilters`)
+  i `BookCard`-ov "Dodato ✓" `setTimeout` su već bili očišćeni u
+  `onUnmounted` (deo prvobitnog commit-a). Otkriven i ispravljen jedan
+  **pravi, pre-postojeći propust** (nije uveden ovom fazom, ali `Shop.vue`
+  je već pod revizijom): `debounceTimer` (cena/pretraga debounce, postoji od
+  Faze 3, deo 3) se nikad nije čistio pri unmount-u. Bez toga bi, ako
+  korisnik otkuca cenu/pretragu pa odmah pre isteka 400ms klikne na knjigu
+  (SPA navigacija na `Product.vue`), zakasneli `apply()` i dalje pozvao
+  `router.get(route('shop'), ...)` NAKON što je `Shop.vue` već unmount-ovan
+  — tiho bi prekinuo/preusmerio navigaciju na koju je korisnik već otišao.
+  Dodato `clearTimeout(debounceTimer)` u isti `onUnmounted` blok kao i
+  ostala dva cleanup-a.
 - **CI nalaz (prijavljeno, workflow NIJE menjan bez odobrenja):** PR-ovi
   (uključujući ovaj) nemaju check run-ove jer `.github/workflows/deploy.yml`
   ima `on: push: branches: [main, develop]` — **nema `pull_request` trigger
