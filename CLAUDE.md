@@ -802,6 +802,101 @@ auth **stranica** (sadržaj ispod nav trake) nije dirana.
   korisnički dropdown čitljiv) — sve preko privremenih test naloga
   (`cdp-nav-check@example.com` i sl.), obrisanih posle provere.
 
+## Dizajn — kupovni katalog: Shop.vue i Product.vue (Faza 6, korak 3)
+Logika (filteri, debounce, pretraga, paginacija, slug rute, cart, stock
+prikaz) **nije dirana** — samo izgled/markup. `/` i `/shop` dele isti
+`Shop.vue` (`CatalogController@index`), pa se sve ispod odnosi i na
+početnu stranicu.
+- **Izbor: čist Tailwind sa `brand-*` tokenima, ne shadcn-vue.** Projekat
+  do sada nema nijednu shadcn komponentu dodatu (samo `components.json`
+  podešen, vidi Stack), a ovaj korak treba bespoke elemente (tipografski
+  placeholder korica, terakota pill dugmad, drawer filter panel) koji se ne
+  mapiraju čisto na generičke shadcn primitive (Button/Card/Select) — dodavanje
+  shadcn-a ovde bi značilo instalaciju/build rizik za marginalnu korist, a
+  Shop/Product su i do sada bili čist Tailwind. Odluka ostaje po potrebi
+  revidirana za sledeće korake (npr. ako admin panel redizajn kasnije stvarno
+  profitira od shadcn Table/Form komponenti).
+- **`BookCoverPlaceholder.vue`** (nova, `resources/js/Components/Catalog/`) —
+  generiše tipografski placeholder kad `image` nije prisutna: naslov u
+  `font-serif` (Lora), autor ispod u `brand-text-secondary`, tanak dekorativni
+  okvir. Pozadina se **deterministički** bira iz jednostavnog hash-a naslova
+  (`hash % 6`) nad palettom od 6 toplih nijansi (`#F6EEE3` `#EAD9C5`
+  `#E4CBAE` `#D9C2A6` `#C9AD8F` `#DDCFC0`) — ista knjiga uvek dobija istu
+  boju, susedne kartice u gridu variraju. Kad `image` postoji, prikazuje se
+  slika umesto placeholder-a (isti prop-interfejs za oba slučaja). Koristi je
+  i `BookCard.vue` (Shop grid) i `Product.vue` (detalj knjige) — jedna
+  komponenta, bez duplirane placeholder logike.
+  **Napomena o Tailwind opacity modifikatoru:** `brand-*` tokeni su
+  definisani kao plain hex string preko CSS varijable (`'var(--brand-x)'`),
+  ne kao Tailwind-ova `withOpacityValue` funkcija (koja bi trebalo da bude
+  string sa `<alpha-value>` placeholder-om) — Tailwind 3.4 za takve (string,
+  ne function) theme vrednosti **tiho ignoriše** `/opacity` modifikator
+  (npr. `border-brand-text-primary/15` bi se renderovao kao potpuno
+  neprovidna boja, bez greške, bez efekta). Zato dekorativni okvir u
+  placeholder-u koristi `border-white/40` (pravi, statički Tailwind `white`,
+  opacity tu radi ispravno) umesto opacity-varijante brand tokena — vizuelno
+  bolji izbor uostalom (tanka bela linija radi na svih 6 nijansi podjednako
+  dobro). Isto pravilo je već primenjeno u koraku 2 (cart bedž `ring-2
+  ring-brand-page`, umesto opacity varijante).
+- **`BookCard.vue`** — zaobljeni uglovi, `bg-white` kartica sa `bg-brand-*`
+  paletom u placeholder-u korice (ne cela kartica, samo "korice" deo, kako je
+  i traženo), naslov `font-serif` sa hover u `brand-accent`, hover na celoj
+  kartici (`-translate-y-1` + senka). **Terakota "U korpu" pill dugme
+  direktno na kartici** — poziva `cart.addItem(book.product_id, 1)`
+  (postojeća akcija iz `cart.js`, ništa novo), onemogućeno kad `!available ||
+  stock === null` (ista `canBuy` logika kao `Product.vue`, uskladjeno).
+  Root kartice je **plain `<div>`, ne `<Link>`** (za razliku od stare
+  verzije) — cena/dugme su van `<Link>`-a koji obavija samo koricu i naslov,
+  da dugme unutar linka ne bude ugnježdeni interaktivni element (nevalidan
+  HTML, i click bi bubble-ovao u navigaciju). **Backend dodatak (minimalan,
+  nužan za ovaj UI):** `CatalogController::card()` do sada nije slao
+  `product_id` u Shop listing payload-u (samo `Product::detail()` za
+  Product.vue ga je imao) — dodato `'product_id' => $product->id` (podatak
+  je već učitan preko postojećeg `with('product:id,...')`, nema nove upit).
+  Ovo je jedina backend izmena u ovom koraku; nijedan test ne proverava
+  odsustvo tog polja (provereno grep-om), `php artisan test` i dalje 348/348.
+  **Card footer je `flex-col`** (cena+dostupnost red, PA pun-širine dugme
+  ispod), ne `flex-row justify-between` — na 2-kolonoj mobilnoj mreži uska
+  kartica je lomila cenu u novi red kad su cena i dugme bili u istom redu
+  (uhvaćeno vizuelnom proverom, ispravljeno pre commit-a).
+- **Filter panel (`Shop.vue`)** — select/checkbox/input stilovi na
+  `brand-*` tokenima. **Mobilni (`< md`)**: dugme "Filteri" (sa tačkicom kad
+  ima aktivnih filtera) otvara **`fixed` drawer sa desne strane** (ne
+  accordion koji gura sadržaj) + potamnjeni overlay preko cele stranice,
+  zatvara se na X, klik na overlay, ili "Prikaži rezultate". **Bez
+  `<Teleport>`** — drawer (`fixed`, `z-50`) je DOM-ski POSLE `<nav>`
+  (`sticky`, `z-50`) unutar `AuthenticatedLayout`-a; kod jednakih z-index
+  vrednosti CSS iscrtava kasniji DOM element iznad, pa drawer ispravno
+  prekriva nav bez ikakvog dodatnog mehanizma (provereno vizuelno — nav je
+  vidljivo zatamnjen ispod overlay-a kad je drawer otvoren). Breakpoint
+  promenjen sa starog `lg:` na `md:` (tačno kako je traženo — "< md
+  breakpoint"). Desktop (`md+`): ista polja, `md:static` bez `fixed`/overlay
+  klasa (isti markup, samo druge klase na istom wrapper `<div>`-u — nema
+  duplog filter markup-a).
+- **`Product.vue`** — 2 kolone na `md+` (korice `md:col-span-2`, detalji
+  `md:col-span-3`), 1 kolona ispod toga. Naslov `font-serif`, autori sa
+  ulogama (pisci odvojeno od prevodilaca/ilustratora, kao i ranije),
+  metapodaci u `<dl>` mreži, opis sa `max-w-prose` + `leading-relaxed`.
+  **Fix uhvaćen mobilnom proverom:** dugme "Dodaj u korpu" pored input polja
+  za količinu (`flex items-center gap-4`) je lomilo TEKST dugmeta u dva reda
+  na uskom ekranu (nedovoljno mesta u redu) — dodato `flex-wrap` na
+  kontejner (dugme celo ide u novi red ako ne stane, ne lomi sopstveni
+  tekst) + `whitespace-nowrap` na dugme.
+- **`Pagination.vue`** — samo boje (`indigo-600` aktivna stranica →
+  `brand-accent`), logika/struktura linkova nedirana.
+- Testirano: `npx vite build`, `npm run test` (vitest, 10 passed),
+  `php artisan test` (348 passed, uključujući `ShopCatalogTest`/
+  `BookDetailTest` bez izmena — oba su čisto Inertia-prop bazirana, ne
+  proveravaju render-ovani markup, pa promena izgleda nije mogla da ih
+  pokvari). Vizuelno provereno (headless Chrome + CDP screenshot,
+  desktop 1400px i mobilni 390px emulacija): Shop grid (uključujući
+  "U korpu" na kartici), Product stranica, i knjiga sa `stock = 0`
+  (onemogućeno dugme na kartici i na Product stranici, "Nema na stanju"
+  crveno) — privremeno postavljeno na realnoj dev knjizi (`na-drini-cuprija`)
+  preko tinker-a i **vraćeno na `stock = 10`** posle provere. Mobilni filter
+  drawer testiran otvoren/zatvoren. Konzola bez grešaka na svim proverenim
+  stranicama.
+
 ### Planirano/otvoreno
 - Kad se bude radio redizajn Cart/Checkout stranice, tada dodati i
   funkcionalnost sačuvanih adresa: `addresses` tabela, predpopunjavanje

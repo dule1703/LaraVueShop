@@ -1,41 +1,62 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { availabilityLabel, formatLabels, formatPrice } from '@/lib/bookLabels';
+import { useCartStore } from '@/Stores/cart';
+import BookCoverPlaceholder from '@/Components/Catalog/BookCoverPlaceholder.vue';
 
-defineProps({
+const props = defineProps({
     book: { type: Object, required: true },
 });
+
+const cart = useCartStore();
+
+// stock === null (e-knjiga) checkout još ne podržava — dugme ostaje onemogućeno (Faza 5).
+const canBuy = computed(() => props.book.available && props.book.stock !== null);
+
+function addToCart() {
+    if (!canBuy.value) return;
+    cart.addItem(props.book.product_id, 1);
+}
 </script>
 
 <template>
-    <Link
-        :href="route('book.show', book.slug)"
-        class="group flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-200"
-    >
-        <div class="aspect-[3/4] bg-gray-100 overflow-hidden">
-            <img
-                v-if="book.image"
-                :src="book.image"
-                :alt="book.title"
-                loading="lazy"
-                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+    <div class="group flex h-full flex-col overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+        <Link :href="route('book.show', book.slug)" class="block aspect-[3/4] overflow-hidden">
+            <BookCoverPlaceholder
+                :title="book.title"
+                :author="book.authors.join(', ')"
+                :image="book.image"
+                class="transition-transform duration-300 group-hover:scale-105"
             />
-            <div v-else class="w-full h-full flex items-center justify-center text-sm text-gray-400">Bez korice</div>
-        </div>
-        <div class="flex flex-col flex-1 p-4">
-            <h3 class="font-semibold text-gray-900 line-clamp-2 group-hover:text-indigo-600 transition-colors">
-                {{ book.title }}
-            </h3>
-            <p v-if="book.authors.length" class="mt-1 text-sm text-gray-600 line-clamp-1">
+        </Link>
+        <div class="flex flex-1 flex-col p-4">
+            <Link :href="route('book.show', book.slug)">
+                <h3 class="font-serif text-base font-semibold text-brand-text-primary line-clamp-2 transition-colors group-hover:text-brand-accent">
+                    {{ book.title }}
+                </h3>
+            </Link>
+            <p v-if="book.authors.length" class="mt-1 text-sm text-brand-text-secondary line-clamp-1">
                 {{ book.authors.join(', ') }}
             </p>
-            <p class="mt-1 text-xs text-gray-500">{{ formatLabels[book.format] ?? book.format }}</p>
-            <div class="mt-auto pt-3 flex items-end justify-between">
-                <span class="text-xl font-bold text-gray-900">{{ formatPrice(book.price) }}</span>
-                <span class="text-xs font-medium" :class="book.available ? 'text-green-700' : 'text-red-600'">
-                    {{ availabilityLabel(book) }}
-                </span>
+            <p class="mt-1 text-xs text-brand-text-secondary">{{ formatLabels[book.format] ?? book.format }}</p>
+
+            <div class="mt-auto flex flex-col gap-2 pt-3">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="whitespace-nowrap text-lg font-bold text-brand-text-primary">{{ formatPrice(book.price) }}</span>
+                    <span class="whitespace-nowrap text-xs font-medium" :class="book.available ? 'text-emerald-700' : 'text-red-600'">
+                        {{ availabilityLabel(book) }}
+                    </span>
+                </div>
+                <button
+                    type="button"
+                    :disabled="!canBuy"
+                    class="w-full rounded-full bg-brand-accent px-4 py-2 text-xs font-semibold text-white transition hover:bg-brand-accent-hover disabled:cursor-not-allowed disabled:bg-brand-header-muted"
+                    @click="addToCart"
+                >
+                    U korpu
+                </button>
             </div>
         </div>
-    </Link>
+    </div>
 </template>
