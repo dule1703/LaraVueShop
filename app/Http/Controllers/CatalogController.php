@@ -45,6 +45,7 @@ class CatalogController extends Controller
         $product = $book->product;
 
         return [
+            'product_id' => $product->id,
             'slug' => $product->slug,
             'title' => $product->name,
             'image' => $product->image,

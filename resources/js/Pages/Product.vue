@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import BookCoverPlaceholder from '@/Components/Catalog/BookCoverPlaceholder.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { useCartStore } from '@/Stores/cart';
 import { computed, ref } from 'vue';
@@ -43,48 +44,53 @@ const addToCart = () => {
     <Head :title="book.title" />
 
     <AuthenticatedLayout>
-        <div class="py-10">
-            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-                <nav class="mb-6 text-sm text-gray-500 flex flex-wrap gap-x-2">
-                    <Link :href="route('shop')" class="hover:text-gray-900">Knjige</Link>
+        <div class="min-h-screen bg-brand-page py-10">
+            <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+                <nav class="mb-6 flex flex-wrap gap-x-2 text-sm text-brand-text-secondary">
+                    <Link :href="route('shop')" class="hover:text-brand-accent">Knjige</Link>
                     <template v-if="book.category">
                         <span>/</span>
-                        <Link :href="route('shop', { category: book.category.slug })" class="hover:text-gray-900">{{ book.category.name }}</Link>
+                        <Link :href="route('shop', { category: book.category.slug })" class="hover:text-brand-accent">{{ book.category.name }}</Link>
                     </template>
                 </nav>
 
-                <div class="bg-white shadow-sm sm:rounded-lg p-6">
-                    <div class="grid md:grid-cols-3 gap-8">
-                        <div class="md:col-span-1">
-                            <img v-if="book.image" :src="book.image" :alt="book.title" class="w-full h-auto rounded-lg" />
-                            <div v-else class="aspect-[3/4] rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">Bez korice</div>
+                <div class="rounded-2xl bg-white p-6 shadow-sm sm:p-8">
+                    <div class="grid gap-8 md:grid-cols-5">
+                        <div class="md:col-span-2">
+                            <div class="aspect-[3/4] overflow-hidden rounded-xl">
+                                <BookCoverPlaceholder
+                                    :title="book.title"
+                                    :author="writers.map((a) => a.name).join(', ')"
+                                    :image="book.image"
+                                />
+                            </div>
                         </div>
 
-                        <div class="md:col-span-2">
-                            <h1 class="text-3xl font-bold text-gray-900">{{ book.title }}</h1>
-                            <p v-if="book.subtitle" class="mt-1 text-lg text-gray-600">{{ book.subtitle }}</p>
+                        <div class="md:col-span-3">
+                            <h1 class="font-serif text-3xl font-semibold text-brand-text-primary">{{ book.title }}</h1>
+                            <p v-if="book.subtitle" class="mt-1 text-lg text-brand-text-secondary">{{ book.subtitle }}</p>
 
-                            <p v-if="writers.length" class="mt-3 text-gray-800">
+                            <p v-if="writers.length" class="mt-3 text-brand-text-primary">
                                 <template v-for="(a, i) in writers" :key="a.slug">
                                     <span v-if="i">, </span>
-                                    <Link :href="route('shop', { author: a.slug })" class="hover:underline">{{ a.name }}</Link>
+                                    <Link :href="route('shop', { author: a.slug })" class="hover:text-brand-accent hover:underline">{{ a.name }}</Link>
                                 </template>
                             </p>
-                            <p v-if="contributors.length" class="mt-1 text-sm text-gray-600">
+                            <p v-if="contributors.length" class="mt-1 text-sm text-brand-text-secondary">
                                 <template v-for="(a, i) in contributors" :key="a.slug + a.role">
                                     <span v-if="i">, </span>
-                                    <Link :href="route('shop', { author: a.slug })" class="hover:underline">{{ a.name }}</Link>
+                                    <Link :href="route('shop', { author: a.slug })" class="hover:text-brand-accent hover:underline">{{ a.name }}</Link>
                                     ({{ roleLabels[a.role] ?? a.role }})
                                 </template>
                             </p>
 
-                            <p class="mt-6 text-3xl font-semibold text-gray-900">{{ formatPrice(book.price) }}</p>
-                            <p class="mt-1 text-sm font-medium" :class="book.available ? 'text-green-700' : 'text-red-600'">
+                            <p class="mt-6 text-3xl font-bold text-brand-text-primary">{{ formatPrice(book.price) }}</p>
+                            <p class="mt-1 text-sm font-medium" :class="book.available ? 'text-emerald-700' : 'text-red-600'">
                                 {{ availabilityLabel(book) }}<template v-if="book.stock !== null && book.available"> ({{ book.stock }} kom.)</template>
                             </p>
 
-                            <div class="mt-6 flex items-center gap-4">
-                                <label for="quantity" class="text-gray-700">Količina:</label>
+                            <div class="mt-6 flex flex-wrap items-center gap-4">
+                                <label for="quantity" class="text-brand-text-primary">Količina:</label>
                                 <input
                                     id="quantity"
                                     v-model.number="quantity"
@@ -92,35 +98,35 @@ const addToCart = () => {
                                     min="1"
                                     :max="maxQuantity"
                                     :disabled="!canBuy"
-                                    class="border rounded px-3 py-2 w-20 disabled:bg-gray-100"
+                                    class="w-20 rounded-lg border border-black/10 px-3 py-2 text-brand-text-primary focus:border-brand-accent focus:ring-brand-accent disabled:bg-brand-card"
                                 />
                                 <button
                                     type="button"
                                     :disabled="!canBuy"
-                                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                    class="whitespace-nowrap rounded-full bg-brand-accent px-6 py-2.5 font-semibold text-white transition hover:bg-brand-accent-hover disabled:cursor-not-allowed disabled:bg-brand-header-muted"
                                     @click="addToCart"
                                 >
                                     Dodaj u korpu
                                 </button>
                             </div>
-                            <p v-if="book.stock === null" class="mt-2 text-sm text-gray-500">
+                            <p v-if="book.stock === null" class="mt-2 text-sm text-brand-text-secondary">
                                 Kupovina e-knjiga još nije omogućena.
                             </p>
-                            <p v-if="added" class="mt-2 text-sm text-green-700">
-                                Dodato u korpu. <Link :href="route('cart')" class="underline">Pogledaj korpu</Link>
+                            <p v-if="added" class="mt-2 text-sm text-emerald-700">
+                                Dodato u korpu. <Link :href="route('cart')" class="underline hover:text-brand-accent">Pogledaj korpu</Link>
                             </p>
 
-                            <dl class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                                <div v-for="row in details" :key="row.label" class="flex justify-between border-b border-gray-100 py-1.5">
-                                    <dt class="text-gray-500">{{ row.label }}</dt>
-                                    <dd class="text-gray-900 text-right">
-                                        <Link v-if="row.href" :href="row.href" class="hover:underline">{{ row.value }}</Link>
+                            <dl class="mt-8 grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+                                <div v-for="row in details" :key="row.label" class="flex justify-between border-b border-black/10 py-1.5">
+                                    <dt class="text-brand-text-secondary">{{ row.label }}</dt>
+                                    <dd class="text-right text-brand-text-primary">
+                                        <Link v-if="row.href" :href="row.href" class="hover:text-brand-accent hover:underline">{{ row.value }}</Link>
                                         <template v-else>{{ row.value }}</template>
                                     </dd>
                                 </div>
                             </dl>
 
-                            <p v-if="book.description" class="mt-8 text-gray-700 whitespace-pre-line">{{ book.description }}</p>
+                            <p v-if="book.description" class="mt-8 max-w-prose whitespace-pre-line leading-relaxed text-brand-text-primary">{{ book.description }}</p>
                         </div>
                     </div>
                 </div>
