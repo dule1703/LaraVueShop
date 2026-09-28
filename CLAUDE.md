@@ -999,11 +999,45 @@ početnu stranicu.
   uopšte**. Workflow se pokreće tek POSLE merge-a (push na `develop`/`main`
   koji nastaje od merge commit-a), nikad na sam otvoren PR. Ovo je
   pre-postojeće stanje (proverено, isto važi za sve dosadašnje PR-ove ove
-  faze), ne nešto što je ovaj korak pokvario. Ako se želi da testovi prođu
-  PRE merge-a (vidljivo na samom PR-u), workflow treba i `pull_request`
-  trigger — to zahteva odluku (npr. da li `build-and-deploy`/`notify` job-ovi
-  treba da se preskoče za PR-eve, samo `tests` job da se pokrene) i eksplicitno
-  odobrenje pre izmene.
+  faze), ne nešto što je ovaj korak pokvario.
+  ✅ **REŠENO** (uz eksplicitno odobrenje) — umesto menjanja `deploy.yml`,
+  dodat poseban `.github/workflows/ci.yml` sa `pull_request` trigger-om.
+  Vidi sekciju **CI** ispod.
+
+## CI
+Dva odvojena GitHub Actions workflow-a u `.github/workflows/`:
+
+- **`ci.yml`** — `pull_request` trigger (`branches: [main, develop]`, **ne**
+  `pull_request_target` — namerno: `pull_request_target` bi pokrenuo workflow
+  fajl iz BAZNE grane sa write-level podrazumevanim `GITHUB_TOKEN`-om čak i za
+  PR sa fork-a, što je nepotreban bezbednosni rizik za workflow koji samo
+  pokreće testove i ne treba mu nikakav write pristup). Job `tests`
+  (u checks-ima se pojavljuje kao **"tests"**, pod workflow-om **"CI"**)
+  ponavlja iste korake kao `tests` job u `deploy.yml` (checkout, PHP, `cp
+  .env.example .env`, `composer install`, Node, `npm ci --legacy-peer-deps` +
+  `npm run build`, `npm run test`, `php artisan key:generate`,
+  `composer test`) — **jedina namerna razlika je PHP 8.2** (kao lokalno,
+  vidi Stack) umesto `8.4` (server, vidi `deploy.yml`) — ovaj workflow
+  proverava PR-eve u istom PHP okruženju u kom se lokalno razvija, ne u
+  produkcionom. `permissions: contents: read` (minimalno, workflow ništa ne
+  piše). `concurrency` (group po PR broju, `cancel-in-progress: true`) —
+  novi push na isti PR otkazuje prethodni, još aktivan run, umesto da čekaju
+  u redu. **Bez ijednog secret-a** — isto kao `deploy.yml`-ov `tests` job
+  (SQLite `:memory:`, `FakePaymentGateway` u testovima, ne prave PayPal
+  pozive, vidi Faza 0/POZNATI PROBLEMI #7).
+- **`deploy.yml`** — nepromenjen. `push` trigger (`branches: [main,
+  develop]`) — pokreće se TEK POSLE merge-a (na sam merge commit), ne na
+  otvoren PR. `tests` job tu i dalje postoji i i dalje koristi PHP 8.4
+  (server verzija) — to je namerno drugačije od `ci.yml`-a, obe provere
+  imaju svrhu (jedna hvata probleme PRE merge-a u lokalnom PHP okruženju,
+  druga potvrđuje da isto prolazi u okruženju u kom se stvarno deploy-uje,
+  odmah pre `build-and-deploy` job-a).
+- **Ručni korak, van ovog PR-a:** da GitHub stvarno **blokira merge** dok
+  `ci.yml`-ov `tests` check ne prođe, potrebno je u GitHub repo Settings →
+  Branches → branch protection rule za `develop`/`main` → "Require status
+  checks to pass before merging" → dodati `tests` (iz `ci.yml`) kao
+  obavezan check. Ovo se ne može podesiti iz workflow YAML-a — čisto GitHub
+  UI/API podešavanje, van dosega ovog repo-a.
 
 ### Planirano/otvoreno
 - Kad se bude radio redizajn Cart/Checkout stranice, tada dodati i
