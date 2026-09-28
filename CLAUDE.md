@@ -727,9 +727,89 @@ stranica).
   pozadina header-a, svetla pozadina guest kartice — nema još tamne pozadine
   gde bi se testirao `color` prop na drugačijem primeru).
 
+## Dizajn — header/navigacija (Faza 6, korak 2)
+Cilj: nav traka stvarno koristi `brand-*` tokene iz koraka 1 (ne samo
+`Logo.vue`, koji je već bio ožičen). Samo `AuthenticatedLayout.vue` +
+pomoćne komponente koje isključivo ona koristi (`NavLink.vue`,
+`ResponsiveNavLink.vue`) — nijedna Shop/Product/Cart/Checkout/admin/Breeze
+auth **stranica** (sadržaj ispod nav trake) nije dirana.
+- **Nav pozadina** `bg-white` → `bg-brand-header`; border `border-gray-100`
+  → `border-black/10` (brand tokeni su hex vrednosti preko CSS varijabli,
+  ne HSL, pa Tailwind-ov `/opacity` modifikator na njima nije pouzdan — vidi
+  napomena u koraku 1 — zato je border ostao na statičkoj `black/10` boji,
+  ne npr. `border-brand-header/10`).
+- **Logo link, dropdown korisnika, hamburger, mobilni meni** — svi stari
+  `gray-*`/`indigo-*` prelaze na `brand-header-text`/`brand-header-muted`/
+  `brand-card`.
+- **`NavLink.vue`/`ResponsiveNavLink.vue`** (koristi ih isključivo
+  `AuthenticatedLayout.vue` — provereno grep-om, bezbedno menjati): default
+  (neaktivno) stanje `brand-header-muted` → hover `brand-header-text`;
+  aktivno stanje `brand-header-text` + `border-brand-accent`
+  (desktop)/`bg-brand-card` (mobile). Ovo je namerno "tiši" izgled — koriste
+  ga i customer-facing (Shop) i admin linkovi (Categories/Products/Books/
+  Authors/Publishers/Orders) podjednako.
+- **Shop link ističe se** preko dodatne `class="font-semibold"` na tom
+  jednom `<NavLink>` (Vue automatski spaja `class` atribut sa NavLink-ovom
+  internom `:class` na root `<Link>` elementu, pošto `inheritAttrs` nije
+  isključen) — admin linkovi ostaju na default (regular weight) stilu
+  NavLink-a, vizuelno tiši od Shop-a, kako je traženo. Nijedan CSS specifično
+  za admin nije dodat — "tišina" dolazi iz IZOSTANKA `font-semibold`, ne iz
+  posebne admin klase.
+- **Cart bedž** (broj stavki): `bg-[#FF2D20]` (stari Laravel-crveni,
+  van palete) → `bg-brand-accent` + `ring-2 ring-brand-page` (beličasti
+  prsten). Razlog za prsten: sam `brand-accent` (#D9713A) i `brand-header-bg`
+  (#E4CBAE) su obe tople/narandžaste nijanse — izračunat kontrast boja
+  bedž-na-pozadini je nizak (~2.1:1), sličan starom crvenom (~2.4:1), pa
+  golo popunjavanje ne bi pouzdano "iskočilo" iz pozadine. Prsten rešava to
+  nezavisno od tačne nijanse. Vizuelno potvrđeno (headless Chrome + CDP,
+  screenshot posle stvarnog dodavanja knjige u korpu kao gost) — bedž se
+  jasno vidi na header pozadini.
+- **Search bar**: `bg-gray-100`/`focus:ring-[#FF2D20]` → `bg-brand-page`/
+  `focus:ring-brand-accent`/`focus:border-brand-accent`; ikonica lupe
+  `text-gray-400` → `text-brand-header-muted`.
+- **Login/Register dugmad**: `text-gray-700`/`bg-[#FF2D20]` →
+  `text-brand-header-muted`/`bg-brand-accent` + `hover:bg-brand-accent-hover`.
+- **Sitan fix (konzola, otkriven pri Faza 6 koraku 1 proveri)**:
+  `resources/js/app.js` je registrovao samo `faShoppingCart` u
+  `library.add(...)`, a nav search bar koristi `['fas', 'search']` — otud
+  "Could not find one or more icon(s)" greška u konzoli na SVAKOJ stranici
+  koja renderuje `AuthenticatedLayout`. Dodat `faSearch` u isti `library.add`
+  poziv. Grep za `font-awesome-icon`/`FontAwesomeIcon` potvrđuje da su to
+  jedine dve upotrebe u projektu (`search`, `shopping-cart`) — nema drugih
+  neregistrovanih ikona.
+- `bg-gray-50` na spoljnom wrapper `<div>` (pozadina ISPOD nav trake, gde
+  sadržaj stranice sedi) i `<header v-if="$slots.header" class="bg-white
+  shadow">` (slot za naslov stranice, npr. "Profile") su **namerno
+  nedirani** — to je sadržaj stranice/page shell, ne nav traka, van opsega
+  ovog koraka.
+- **OTVOREN, ODVOJEN PROBLEM (prijavljen, ne popravljen ovaj korak)**:
+  `AuthenticatedLayout.vue` (nav traka, koristi je Shop/Product/Cart/
+  Checkout/Dashboard/Profile/Orders/sve admin stranice) i `GuestLayout.vue`
+  (Breeze auth forme: Login/Register/ForgotPassword/ResetPassword/
+  VerifyEmail/ConfirmPassword) **nisu ista komponenta i ne dele nav traku**
+  — `GuestLayout.vue` nema NIKAKVU navigaciju, samo centrirano `Logo` iznad
+  kartice na `bg-gray-100`. Potvrđeno grep-om (`AuthenticatedLayout`: 27
+  fajlova, `GuestLayout`: 7 fajlova, bez preklapanja) i vizuelno (headless
+  Chrome screenshot `/login` — nema nav trake). Ovo je pre-postojeća
+  arhitektura (nije unela Faza 6), ali znači da "ista nav svuda" ne važi
+  danas — odluka da li Breeze auth stranice dobiju punu nav traku ili
+  ostaju na minimalnom centriranom layoutu čeka dogovor, nije doneta ovde.
+- Testirano: `npx vite build`, `npm run test` (vitest), `php artisan test`
+  prolaze bez grešaka; konzola bez icon grešaka (headless Chrome + CDP,
+  provereno na `/shop`, `/knjiga/{slug}`, `/login`). Vizuelno provereno
+  (screenshot): Shop, Product, Cart (uključujući bedž posle stvarnog dodavanja
+  u korpu), i nav kao admin (Shop bold/istaknut, admin linkovi tiši,
+  korisnički dropdown čitljiv) — sve preko privremenih test naloga
+  (`cdp-nav-check@example.com` i sl.), obrisanih posle provere.
+
 ### Planirano/otvoreno
 - Kad se bude radio redizajn Cart/Checkout stranice, tada dodati i
   funkcionalnost sačuvanih adresa: `addresses` tabela, predpopunjavanje
   checkout forme za ulogovane korisnike, checkbox "sačuvaj kao podrazumevanu
   adresu", profile stranica dobija sekciju za upravljanje adresama. **Ne
   raditi sada** — samo zabeleženo da ne bude zaboravljeno kad dođe taj korak.
+- **Odluka na čekanju:** da li Breeze auth stranice (`GuestLayout.vue`)
+  dobijaju punu nav traku (kao `AuthenticatedLayout.vue`) ili ostaju na
+  minimalnom centriranom layoutu bez navigacije — vidi "header/navigacija
+  (Faza 6, korak 2)" gore. Trenutno stanje (bez nav trake na login/register)
+  je pre-postojeće, ne uvedeno ovim korakom.

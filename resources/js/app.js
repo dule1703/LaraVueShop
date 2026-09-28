@@ -10,10 +10,10 @@ import { useAuthStore } from '@/Stores/auth';
 import { useCartStore } from '@/Stores/cart';
 
 import { library } from '@fortawesome/fontawesome-svg-core';
-import { faShoppingCart } from '@fortawesome/free-solid-svg-icons';
+import { faShoppingCart, faSearch } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 
-library.add(faShoppingCart);
+library.add(faShoppingCart, faSearch);
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 const pinia = createPinia();
