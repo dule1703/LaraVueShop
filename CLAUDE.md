@@ -1040,6 +1040,73 @@ Dva odvojena GitHub Actions workflow-a u `.github/workflows/`:
   obavezan check. Ovo se ne može podesiti iz workflow YAML-a — čisto GitHub
   UI/API podešavanje, van dosega ovog repo-a.
 
+## Header search (fix)
+**Uzrok:** search polje u header-u (`AuthenticatedLayout.vue`, dodato u Faza 6
+koraku 2, PR #58) je bilo čisto dekorativno — `<input>` bez `v-model`,
+`@keyup.enter` ili bilo kog event handler-a. Mobilni hamburger meni nije
+imao search polje uopšte. `Shop.vue`-ov sopstveni search input (`#f-search`)
+je oduvek bio ispravan (`form.search` se inicijalizuje iz `props.filters.search`,
+koji stiže sa servera preko `BookCatalog::filters()`) — problem je bio
+isključivo u header-u, potpuno odvojenoj komponenti bez ikakvog state-a.
+- **Rešenje:** nova `resources/js/Components/HeaderSearch.vue` — **URL (query
+  string) je jedini izvor istine**, ne lokalni state odvojen od `Shop.vue`-a.
+  Čita `usePage().url` (Inertia) da izvuče trenutni `?search=` parametar pri
+  mount-u, i `watch`-uje `page.url` da ostane usklađena sa SVAKOM Inertia
+  navigacijom (uključujući `Shop.vue`-ov debounce preko `replace: true`) —
+  dvosmerna sinhronizacija bez ijednog dodatnog event-a između komponenti.
+  Enter poziva `router.get(route('shop'), params, {...})`: ako je trenutna
+  ruta `shop` ili `home`, ostali aktivni filteri iz URL-a (kategorija, cena,
+  itd.) se **čuvaju** — samo se `search` menja/uklanja i `page` briše (nova
+  pretraga uvek na prvu stranu, isti obrazac kao `Shop.vue`-ov `apply()`);
+  na bilo kojoj drugoj stranici (Cart, Product, ...) kreće se čisto, bez
+  prenošenja te stranice irelevantnog query stringa.
+  Renderovana **dva puta** u `AuthenticatedLayout.vue` (desktop `hidden
+  md:flex` traka i mobilni hamburger meni, koji ranije NIJE imao search
+  polje) — ista komponenta, `input-class`/`icon-class` prop-ovi za
+  drugačiji izgled/veličinu po kontekstu, `@submitted` na mobilnoj instanci
+  zatvara meni posle Enter-a.
+  **Napomena o `route()` u `<script setup>` JS kodu (ne u `<template>`-u):**
+  Ziggy-jev Vue plugin registruje `route` samo kao `app.config.
+  globalProperties`/`provide` (vidi `vendor/tightenco/ziggy/dist/
+  index.esm.js`) — to pokriva pozive UNUTAR `<template>`-a (kompajliraju se
+  kao `_ctx.route(...)`), ali `HeaderSearch.vue`-ov `submit()` poziva
+  `route()` iz plain JS koda, van template-a, gde se bare `route`
+  identifikator razrešava kao pravi global, ne preko `_ctx`. U pravom
+  browseru to radi jer Laravel-ova `@routes` Blade direktiva
+  (`app.blade.php`) ubacuje pravi `window.route` kao poseban `<script>` PRE
+  Vue-a, nezavisno od Vue plugin-a (isti obrazac kao već postojeći
+  `Shop.vue`-ov `apply()`, koji isto zove bare `route()` iz `<script
+  setup>`-a). Test za `HeaderSearch.vue` zato mora da postavi pravi
+  `globalThis.route`, `global.mocks` (vue-test-utils) ne pomaže za pozive
+  van template-a.
+- **Feature test za `/shop?search=...` — već postoji, nije dodat nov.**
+  `tests/Feature/Catalog/ShopCatalogTest.php` već ima 7 testova koji tačno
+  to pokrivaju (ćirilica/latinica, dijakritika, po izdavaču, prazan upit,
+  bez rezultata, kombinovano sa drugim filterima) — svi rade preko
+  `GET /shop?search=...` i proveravaju Inertia props. Ovaj bug je bio čisto
+  frontend (header komponenta nikad nije ni slala zahtev), pa backend
+  logika/testovi nisu bili — i nisu ni sad — pogođeni.
+- **Novi vitest testovi:** `resources/js/Components/HeaderSearch.test.js`
+  (7 testova) — inicijalna vrednost iz URL-a, prazno polje kad nema
+  `?search=`, čuvanje ostalih filtera na `/shop` i `/` (home), NE-čuvanje
+  tuđeg query stringa na drugim stranicama, prazan/samo-razmaci upit
+  uklanja `search` (ne šalje prazan string), `?page=` se uvek uklanja.
+- Testirano: `npx vite build`, `npm run test` (vitest, **24 passed** — 17
+  postojećih + 7 novih), `php artisan test` (348 passed, nepromenjeno).
+  Vizuelno i programski provereno u pravom browseru (headless Chrome + CDP,
+  desktop 1400px i mobilni 390px): Enter na `/shop` (bez filtera) → tačni
+  rezultati; Enter na `/shop?format=paperback` → `format` OSTAJE u URL-u;
+  Enter na Product stranici → `/shop?search=...` BEZ ičega iz te stranice;
+  kucanje u `Shop.vue`-ovom sopstvenom polju → header polje se uskladi
+  posle debounce-a (potvrđeno screenshot-om); mobilni hamburger meni sad
+  ima search polje i radi identično desktop-u.
+  **Napomena o sporosti prvog zahteva u ovom dev okruženju:** prvi Inertia
+  XHR posle hladnog page load-a u headless test okruženju (`php artisan
+  serve` + Vite dev server) zna da potraje i do ~5s (ne bag, samo cold-start
+  PHP dev servera + Vite HMR overhead) — kratki wait-ovi (1.5s) u prvoj
+  iteraciji provere su lažno pokazivali da fix ne radi; sa dužim wait-om
+  (4s) svi scenariji prolaze.
+
 ### Planirano/otvoreno
 - Kad se bude radio redizajn Cart/Checkout stranice, tada dodati i
   funkcionalnost sačuvanih adresa: `addresses` tabela, predpopunjavanje
