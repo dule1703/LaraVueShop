@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import BookCard from '@/Components/Catalog/BookCard.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { formatLabels, languageLabel, scriptLabels } from '@/lib/bookLabels';
 
 const props = defineProps({
@@ -36,18 +36,75 @@ onMounted(() => {
     filtersMql.addEventListener('change', syncIsDesktopFilters);
 });
 
-// Back/forward i "Poništi filtere" menjaju props bez remount-a komponente.
-watch(() => props.filters, (filters) => Object.assign(form, filters));
+// Back/forward, "Poništi filtere", I header pretraga (HeaderSearch.vue, koja
+// radi svoju SOPSTVENU router.get() nezavisno od ovog fajla) menjaju props
+// bez remount-a komponente. `syncingFromProps` sprečava da ovo sinhronizovanje
+// samo sebe okine kao da je korisnik otkucao nešto u polju (vidi debounce
+// watch ispod) — bez toga bi SVAKA promena filtera (odbilo koji izvor)
+// zakazala dodatni, potpuno redundantan apply() 400ms kasnije (potvrđeno
+// ručno: drugi identičan zahtev stiže ~400ms posle prvog bez ikakve dalje
+// akcije korisnika). `await nextTick()` drži flag true dok se debounce watch
+// (isti flush ciklus, `flush: 'pre'` podrazumevano) stvarno ne izvrši —
+// resetovanje flag-a odmah posle `Object.assign` (sinhrono) NE bi radilo jer
+// se watcher-i ne izvršavaju sinhrono unutar iste linije koda.
+let syncingFromProps = false;
+watch(() => props.filters, async (filters) => {
+    syncingFromProps = true;
+    Object.assign(form, filters);
+    await nextTick();
+    syncingFromProps = false;
+});
 
 watch([() => form.price_min, () => form.price_max, () => form.search], () => {
+    if (syncingFromProps) return;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(apply, PRICE_DEBOUNCE_MS);
 });
 
 const hasActiveFilters = computed(() => Object.values(props.filters).some((v) => v !== null && v !== false));
 
+// `apply()` čita `form` u trenutku poziva — ako je TADA neka DRUGA Inertia
+// navigacija (npr. HeaderSearch.vue-ov router.get(), ili čak klik na
+// paginaciju) još u letu, `form` može biti zastareo (props od te navigacije
+// još nisu stigli/sinhronizovani preko watch-a iznad). Bez ove zaštite,
+// lokalna promena filtera bi poslala STARU (praznu) `form.search` vrednost i
+// TIHO PREGAZILA pretragu koju je korisnik upravo ukucao u header-u —
+// potvrđeno direktnom reprodukcijom (header pretraga "seobe" + Enter, pa
+// odmah promena format filtera → finalni URL gubi `search=seobe` u
+// potpunosti). `router.on('start'/'finish', ...)` su GLOBALNI Inertia
+// event-ovi (okidaju se za SVAKU navigaciju, ne samo one pokrenute iz ovog
+// fajla), pa ova zaštita pokriva i header pretragu iz potpuno odvojene
+// komponente. Kad se prijavi da je navigacija u toku, `apply()` samo zakaže
+// `pendingReapply` i vrati se bez slanja zahteva; čim se navigacija završi
+// (i `watch(props.filters)` iznad sinhronizuje `form` sa najnovijim stanjem
+// sa servera), `apply()` se automatski ponovo pozove sa ISPRAVNO spojenim
+// filterima (i lokalna promena i header pretraga).
+let navigationInFlight = false;
+let pendingReapply = false;
+
+const stopNavigationStart = router.on('start', () => {
+    navigationInFlight = true;
+});
+const stopNavigationFinish = router.on('finish', () => {
+    navigationInFlight = false;
+    if (pendingReapply) {
+        pendingReapply = false;
+        apply();
+    }
+});
+
+onUnmounted(() => {
+    stopNavigationStart();
+    stopNavigationFinish();
+});
+
 function apply() {
     clearTimeout(debounceTimer);
+
+    if (navigationInFlight) {
+        pendingReapply = true;
+        return;
+    }
 
     const params = {};
     for (const [key, value] of Object.entries(form)) {
