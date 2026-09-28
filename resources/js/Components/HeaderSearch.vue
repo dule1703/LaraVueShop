@@ -57,8 +57,10 @@ function submit() {
     <div class="relative w-full">
         <input
             v-model="search"
-            type="text"
-            placeholder="Search products..."
+            type="search"
+            enterkeyhint="search"
+            placeholder="Pretraži knjige, autore..."
+            aria-label="Pretraga"
             :class="inputClass"
             @keyup.enter="submit"
         />

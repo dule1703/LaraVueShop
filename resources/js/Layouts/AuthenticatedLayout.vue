@@ -30,7 +30,7 @@ const cart = useCartStore();
                 </Link>
               </div>
               <!-- Navigation Links -->
-              <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+              <div class="hidden space-x-8 md:-my-px md:ms-10 md:flex">
                 <NavLink :href="route('shop')" :active="route().current('shop')" class="font-semibold">
                   Shop
                 </NavLink>
@@ -78,7 +78,7 @@ const cart = useCartStore();
               </div>
 
               <!-- User Dropdown -->
-              <div v-if="page.props.auth?.user" class="relative ms-3 hidden sm:block">
+              <div v-if="page.props.auth?.user" class="relative ms-3 hidden md:block">
                 <Dropdown align="right" width="48">
                   <template #trigger>
                     <span class="inline-flex rounded-md">
@@ -105,13 +105,13 @@ const cart = useCartStore();
               </div>
 
               <!-- Login / Register -->
-              <div v-else class="hidden sm:flex items-center gap-x-4 text-sm">
+              <div v-else class="hidden md:flex items-center gap-x-4 text-sm">
                 <Link :href="route('login')" class="font-medium text-brand-header-muted hover:text-brand-header-text">Log in</Link>
                 <Link :href="route('register')" class="rounded-2xl bg-brand-accent px-5 py-2.5 font-medium text-white hover:bg-brand-accent-hover transition">Register</Link>
               </div>
 
               <!-- Hamburger -->
-              <div class="-me-2 flex items-center sm:hidden">
+              <div class="-me-2 flex items-center md:hidden">
                 <button
                   @click="showingNavigationDropdown = !showingNavigationDropdown"
                   class="inline-flex items-center justify-center rounded-md p-2 text-brand-header-muted hover:bg-brand-card hover:text-brand-header-text transition"
@@ -127,7 +127,7 @@ const cart = useCartStore();
         </div>
 
         <!-- Responsive Navigation Menu (original structure kept) -->
-        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="sm:hidden border-t border-black/10 bg-brand-header">
+        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="md:hidden border-t border-black/10 bg-brand-header">
           <div class="px-4 pt-3">
             <HeaderSearch
               input-class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-2.5 px-4 pl-11 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
