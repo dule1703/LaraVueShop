@@ -17,20 +17,20 @@ const cart = useCartStore();
 <template>
   <div>
     <div class="min-h-screen bg-gray-50">
-      <nav class="border-b border-gray-100 bg-white shadow-sm sticky top-0 z-50">
+      <nav class="border-b border-black/10 bg-brand-header shadow-sm sticky top-0 z-50">
         <!-- Primary Navigation Menu -->
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div class="flex h-16 justify-between">
             <div class="flex">
               <!-- Logo -->
               <div class="flex shrink-0 items-center">
-                <Link :href="route('home')" class="text-xl text-gray-800">
+                <Link :href="route('home')" class="text-xl text-brand-header-text">
                   <Logo />
                 </Link>
               </div>
               <!-- Navigation Links -->
-              <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">                
-                <NavLink :href="route('shop')" :active="route().current('shop')">
+              <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                <NavLink :href="route('shop')" :active="route().current('shop')" class="font-semibold">
                   Shop
                 </NavLink>
               </div>
@@ -42,11 +42,11 @@ const cart = useCartStore();
                 <input
                   type="text"
                   placeholder="Search products..."
-                  class="w-full bg-gray-100 border border-transparent focus:border-gray-300 focus:ring-2 focus:ring-[#FF2D20] rounded-3xl py-3 px-6 pl-12 text-sm placeholder:text-gray-400 transition-all"
+                  class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-3 px-6 pl-12 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
                 />
-                <font-awesome-icon 
-                  :icon="['fas', 'search']" 
-                  class="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 text-lg"
+                <font-awesome-icon
+                  :icon="['fas', 'search']"
+                  class="absolute left-5 top-1/2 -translate-y-1/2 text-brand-header-muted text-lg"
                 />
               </div>
             </div>
@@ -54,9 +54,9 @@ const cart = useCartStore();
             <!-- Right side: Cart + User -->
             <div class="flex items-center gap-x-6">
               <!-- Cart -->
-              <NavLink :href="route('cart')" :active="route().current('cart')" class="flex items-center gap-x-1 text-xl hover:text-[#FF2D20] transition">
+              <NavLink :href="route('cart')" :active="route().current('cart')" class="flex items-center gap-x-1 text-xl hover:text-brand-accent transition">
                 <font-awesome-icon :icon="['fas', 'shopping-cart']" />
-                <span v-if="cart.itemCount > 0" class="ml-1 inline-flex items-center rounded-full bg-[#FF2D20] px-2.5 py-1 text-xs font-bold text-white">
+                <span v-if="cart.itemCount > 0" class="ml-1 inline-flex items-center rounded-full bg-brand-accent px-2.5 py-1 text-xs font-bold text-white ring-2 ring-brand-page">
                   {{ cart.itemCount }}
                 </span>
               </NavLink>
@@ -90,7 +90,7 @@ const cart = useCartStore();
                     <span class="inline-flex rounded-md">
                       <button
                         type="button"
-                        class="inline-flex items-center rounded-2xl border border-transparent bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition"
+                        class="inline-flex items-center rounded-2xl border border-transparent bg-brand-page px-4 py-2 text-sm font-medium text-brand-header-text hover:bg-brand-card transition"
                       >
                         {{ page.props.auth?.user?.name ?? 'Guest' }}
                         <svg class="-me-1 ms-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -112,15 +112,15 @@ const cart = useCartStore();
 
               <!-- Login / Register -->
               <div v-else class="hidden sm:flex items-center gap-x-4 text-sm">
-                <Link :href="route('login')" class="font-medium text-gray-700 hover:text-black">Log in</Link>
-                <Link :href="route('register')" class="rounded-2xl bg-[#FF2D20] px-5 py-2.5 font-medium text-white hover:bg-[#e0281c] transition">Register</Link>
+                <Link :href="route('login')" class="font-medium text-brand-header-muted hover:text-brand-header-text">Log in</Link>
+                <Link :href="route('register')" class="rounded-2xl bg-brand-accent px-5 py-2.5 font-medium text-white hover:bg-brand-accent-hover transition">Register</Link>
               </div>
 
               <!-- Hamburger -->
               <div class="-me-2 flex items-center sm:hidden">
                 <button
                   @click="showingNavigationDropdown = !showingNavigationDropdown"
-                  class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 transition"
+                  class="inline-flex items-center justify-center rounded-md p-2 text-brand-header-muted hover:bg-brand-card hover:text-brand-header-text transition"
                 >
                   <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                     <path :class="{ hidden: showingNavigationDropdown, 'inline-flex': !showingNavigationDropdown }" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -133,7 +133,7 @@ const cart = useCartStore();
         </div>
 
         <!-- Responsive Navigation Menu (original structure kept) -->
-        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="sm:hidden border-t border-gray-100 bg-white">
+        <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="sm:hidden border-t border-black/10 bg-brand-header">
           <div class="space-y-1 pb-3 pt-2 px-4">
             <ResponsiveNavLink :href="route('home')" :active="route().current('home')">
               Home
@@ -143,7 +143,7 @@ const cart = useCartStore();
             </ResponsiveNavLink>
             <ResponsiveNavLink :href="route('cart')" :active="route().current('cart')">
               Cart
-              <span v-if="cart.itemCount > 0" class="ml-2 inline-flex items-center rounded-full bg-[#FF2D20] px-2 py-1 text-xs font-bold text-white">
+              <span v-if="cart.itemCount > 0" class="ml-2 inline-flex items-center rounded-full bg-brand-accent px-2 py-1 text-xs font-bold text-white ring-2 ring-brand-page">
                 {{ cart.itemCount }}
               </span>
             </ResponsiveNavLink>
@@ -172,15 +172,15 @@ const cart = useCartStore();
           </div>
 
           <!-- Responsive User Section -->
-          <div v-if="page.props.auth?.user" class="border-t border-gray-200 pb-4 pt-4 px-4">
-            <div class="text-base font-medium text-gray-800 mb-1">{{ page.props.auth?.user?.name ?? 'Guest' }}</div>
-            <div class="text-sm text-gray-500">{{ page.props.auth?.user?.email }}</div>
+          <div v-if="page.props.auth?.user" class="border-t border-black/10 pb-4 pt-4 px-4">
+            <div class="text-base font-medium text-brand-header-text mb-1">{{ page.props.auth?.user?.name ?? 'Guest' }}</div>
+            <div class="text-sm text-brand-header-muted">{{ page.props.auth?.user?.email }}</div>
             <div class="mt-4 space-y-1">
               <ResponsiveNavLink :href="route('profile.edit')">Profile</ResponsiveNavLink>
               <ResponsiveNavLink :href="route('logout')" method="post" as="button">Log Out</ResponsiveNavLink>
             </div>
           </div>
-          <div v-else class="border-t border-gray-200 pb-4 pt-4 px-4 space-y-1">
+          <div v-else class="border-t border-black/10 pb-4 pt-4 px-4 space-y-1">
             <ResponsiveNavLink :href="route('login')">Log in</ResponsiveNavLink>
             <ResponsiveNavLink :href="route('register')">Register</ResponsiveNavLink>
           </div>
