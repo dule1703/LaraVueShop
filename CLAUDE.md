@@ -1013,25 +1013,26 @@ Dva odvojena GitHub Actions workflow-a u `.github/workflows/`:
   PR sa fork-a, što je nepotreban bezbednosni rizik za workflow koji samo
   pokreće testove i ne treba mu nikakav write pristup). Job `tests`
   (u checks-ima se pojavljuje kao **"tests"**, pod workflow-om **"CI"**)
-  ponavlja iste korake kao `tests` job u `deploy.yml` (checkout, PHP, `cp
-  .env.example .env`, `composer install`, Node, `npm ci --legacy-peer-deps` +
-  `npm run build`, `npm run test`, `php artisan key:generate`,
-  `composer test`) — **jedina namerna razlika je PHP 8.2** (kao lokalno,
-  vidi Stack) umesto `8.4` (server, vidi `deploy.yml`) — ovaj workflow
-  proverava PR-eve u istom PHP okruženju u kom se lokalno razvija, ne u
-  produkcionom. `permissions: contents: read` (minimalno, workflow ništa ne
-  piše). `concurrency` (group po PR broju, `cancel-in-progress: true`) —
-  novi push na isti PR otkazuje prethodni, još aktivan run, umesto da čekaju
-  u redu. **Bez ijednog secret-a** — isto kao `deploy.yml`-ov `tests` job
-  (SQLite `:memory:`, `FakePaymentGateway` u testovima, ne prave PayPal
-  pozive, vidi Faza 0/POZNATI PROBLEMI #7).
+  ponavlja **identične** korake kao `tests` job u `deploy.yml` (checkout,
+  PHP **8.4**, `cp .env.example .env`, `composer install`, Node 22,
+  `npm ci --legacy-peer-deps` + `npm run build`, `npm run test`,
+  `php artisan key:generate`, `composer test`) — namerno ista PHP verzija
+  kao server/`deploy.yml` (usklađeno posle prvobitne verzije koja je koristila
+  8.2 "kao lokalno"; razlika prema lokalnom razvoju i dalje postoji, samo
+  živi u lokalnom `PHP 8.2` iz Stack-a ispod, ne u dva PHP okruženja unutar
+  CI-ja). `permissions: contents: read` (minimalno, workflow ništa ne piše).
+  `concurrency` (group po PR broju, `cancel-in-progress: true`) — novi push
+  na isti PR otkazuje prethodni, još aktivan run, umesto da čekaju u redu.
+  **Bez ijednog secret-a** — isto kao `deploy.yml`-ov `tests` job (SQLite
+  `:memory:`, `FakePaymentGateway` u testovima, ne prave PayPal pozive, vidi
+  Faza 0/POZNATI PROBLEMI #7).
 - **`deploy.yml`** — nepromenjen. `push` trigger (`branches: [main,
   develop]`) — pokreće se TEK POSLE merge-a (na sam merge commit), ne na
-  otvoren PR. `tests` job tu i dalje postoji i i dalje koristi PHP 8.4
-  (server verzija) — to je namerno drugačije od `ci.yml`-a, obe provere
-  imaju svrhu (jedna hvata probleme PRE merge-a u lokalnom PHP okruženju,
-  druga potvrđuje da isto prolazi u okruženju u kom se stvarno deploy-uje,
-  odmah pre `build-and-deploy` job-a).
+  otvoren PR. `tests` job tu i dalje postoji, i dalje PHP 8.4. Sad kad su
+  `ci.yml` i `deploy.yml` PHP-verzijski identični, `ci.yml`-ova jedina
+  stvarna svrha je **vremenski raspored** provere (PRE merge-a, vidljivo na
+  samom PR-u) — ne provera drugog okruženja (to rade lokalni PHP 8.2 razvoj
+  vs. oba CI/deploy workflow-a na 8.4).
 - **Ručni korak, van ovog PR-a:** da GitHub stvarno **blokira merge** dok
   `ci.yml`-ov `tests` check ne prođe, potrebno je u GitHub repo Settings →
   Branches → branch protection rule za `develop`/`main` → "Require status
