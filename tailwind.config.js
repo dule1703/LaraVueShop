@@ -90,5 +90,15 @@ export default {
     	}
     },
 
-  
+    // `forms` je bio uvezen ali NIKAD dodat ovde (pre-postojeći propust,
+    // otkriven pri stilizovanju "Samo na stanju" checkbox-a u terakoti —
+    // `text-brand-accent` na checkbox-u je zavisio od ovog plugin-a i tiho
+    // nije imao efekta, checkbox je ostajao na browser-default plavoj boji).
+    // `strategy: 'class'` (NE podrazumevano 'base'!) — 'base' bi globalno
+    // resetovao IZGLED svakog <input>/<select>/<textarea> na celom sajtu
+    // (admin forme, Breeze auth, checkout...), daleko van opsega ovog
+    // dizajna filter panela. 'class' čini reset opt-in preko `form-*`
+    // klasa (npr. `form-checkbox`) — nula uticaja bilo gde drugde dok se
+    // eksplicitno ne doda.
+    plugins: [forms({ strategy: 'class' })],
 };

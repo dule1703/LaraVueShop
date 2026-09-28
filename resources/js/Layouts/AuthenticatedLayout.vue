@@ -126,15 +126,20 @@ const cart = useCartStore();
           </div>
         </div>
 
+        <!-- Search — drugi red na < md, UVEK vidljiv (ne zavisi od
+             showingNavigationDropdown) da search ne bude sakriven iza
+             hamburgera. Na md+ je desktop traka iznad već dovoljna, pa je
+             ovaj red md:hidden. Nije duplirana u hamburger meniju ispod
+             (uklonjeno odatle) — jedno mesto za search na mobilnom. -->
+        <div class="md:hidden border-t border-black/10 bg-brand-header px-4 py-3">
+          <HeaderSearch
+            input-class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-2.5 px-4 pl-11 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
+            icon-class="absolute left-4 top-1/2 -translate-y-1/2 text-brand-header-muted"
+          />
+        </div>
+
         <!-- Responsive Navigation Menu (original structure kept) -->
         <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="md:hidden border-t border-black/10 bg-brand-header">
-          <div class="px-4 pt-3">
-            <HeaderSearch
-              input-class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-2.5 px-4 pl-11 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
-              icon-class="absolute left-4 top-1/2 -translate-y-1/2 text-brand-header-muted"
-              @submitted="showingNavigationDropdown = false"
-            />
-          </div>
           <div class="space-y-1 pb-3 pt-2 px-4">
             <ResponsiveNavLink :href="route('home')" :active="route().current('home')">
               Home
