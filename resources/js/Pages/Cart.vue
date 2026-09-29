@@ -28,40 +28,40 @@ const decreaseQuantity = (productId) => {
 </script>
 
 <template>
-  <Head title="Cart" />
+  <Head title="Korpa" />
 
   <AuthenticatedLayout>
-    <div class="py-6 md:py-12 bg-gray-50 min-h-screen">
+    <div class="py-6 md:py-12 bg-brand-page min-h-screen">
       <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 class="text-3xl md:text-4xl font-bold mb-6 md:mb-10 text-gray-900 text-center md:text-left">
-          Your Cart
+        <h1 class="font-serif text-3xl md:text-4xl font-semibold mb-6 md:mb-10 text-brand-text-primary text-center md:text-left">
+          Vaša korpa
         </h1>
 
-        <div v-if="cart.itemCount === 0" class="text-center py-16 text-gray-600 text-lg">
-          Your cart is empty.
+        <div v-if="cart.itemCount === 0" class="text-center py-16 text-brand-text-secondary text-lg">
+          Vaša korpa je prazna.
           <div class="mt-6">
-            <a href="/" class="text-blue-600 hover:text-blue-800 font-medium">
-              Continue shopping →
+            <a href="/" class="text-brand-accent hover:text-brand-accent-hover font-medium">
+              Nastavi kupovinu →
             </a>
           </div>
         </div>
 
-        <div v-else-if="cart.isLoading" class="text-center py-16 text-gray-500 text-lg">
+        <div v-else-if="cart.isLoading" class="text-center py-16 text-brand-text-secondary text-lg">
           Učitavanje korpe...
         </div>
 
-        <div v-else class="space-y-6 md:space-y-8">
+        <div v-else class="space-y-4 md:space-y-6">
           <div
             v-for="item in cart.items"
             :key="item.product_id"
-            class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-200 pb-6 last:border-b-0 gap-4 md:gap-6"
+            class="flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-black/5 bg-white p-4 md:p-6 shadow-sm gap-4 md:gap-6"
           >
             <!-- Product info -->
             <div class="flex-1">
-              <h2 class="text-lg md:text-xl font-medium text-gray-900">
+              <h2 class="text-lg md:text-xl font-medium text-brand-text-primary">
                 {{ cart.productDetails[item.product_id]?.name }}
               </h2>
-              <p class="text-sm md:text-base text-gray-600 mt-1">
+              <p class="text-sm md:text-base text-brand-text-secondary mt-1">
                 {{ formatPrice(cart.productDetails[item.product_id]?.price ?? 0) }}
               </p>
             </div>
@@ -71,18 +71,18 @@ const decreaseQuantity = (productId) => {
               <button
                 @click="decreaseQuantity(item.product_id)"
                 :disabled="item.quantity <= 1"
-                class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition text-lg md:text-xl font-medium"
+                class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border border-black/10 text-brand-text-primary hover:bg-brand-card disabled:opacity-40 disabled:cursor-not-allowed transition text-lg md:text-xl font-medium"
               >
                 −
               </button>
 
-              <span class="w-10 md:w-12 text-center font-medium text-lg md:text-xl">
+              <span class="w-10 md:w-12 text-center font-medium text-lg md:text-xl text-brand-text-primary">
                 {{ item.quantity }}
               </span>
 
               <button
                 @click="increaseQuantity(item.product_id)"
-                class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded border border-gray-300 text-gray-600 hover:bg-gray-100 transition text-lg md:text-xl font-medium"
+                class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border border-black/10 text-brand-text-primary hover:bg-brand-card transition text-lg md:text-xl font-medium"
               >
                 +
               </button>
@@ -90,7 +90,7 @@ const decreaseQuantity = (productId) => {
 
             <!-- Subtotal & Remove -->
             <div class="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
-              <p class="font-medium text-gray-900 text-lg md:text-xl">
+              <p class="font-semibold text-brand-text-primary text-lg md:text-xl">
                 {{ formatPrice((cart.productDetails[item.product_id]?.price ?? 0) * item.quantity) }}
               </p>
 
@@ -98,23 +98,23 @@ const decreaseQuantity = (productId) => {
                 @click="cart.removeItem(item.product_id)"
                 class="text-red-600 hover:text-red-800 font-medium text-base md:text-lg transition"
               >
-                Remove
+                Ukloni
               </button>
             </div>
           </div>
 
           <!-- Total & Checkout -->
-          <div class="pt-6 md:pt-8 border-t border-gray-200">
-            <div class="flex justify-end text-xl md:text-2xl font-bold text-gray-900">
-              Total: {{ formatPrice(cart.totalAmount) }}
+          <div class="pt-6 md:pt-8 border-t border-black/10">
+            <div class="flex justify-end text-xl md:text-2xl font-bold text-brand-text-primary">
+              Ukupno: <span class="text-brand-accent ml-2">{{ formatPrice(cart.totalAmount) }}</span>
             </div>
 
             <div class="mt-6 md:mt-8 flex justify-center sm:justify-end">
               <a
                 href="/checkout"
-                class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 md:py-4 px-8 md:px-10 rounded-lg transition text-center w-full sm:w-auto text-base md:text-lg"
+                class="inline-block rounded-full bg-brand-accent hover:bg-brand-accent-hover text-white font-semibold py-3 md:py-4 px-8 md:px-10 transition text-center w-full sm:w-auto text-base md:text-lg"
               >
-                Proceed to Checkout
+                Nastavi na plaćanje
               </a>
             </div>
           </div>
