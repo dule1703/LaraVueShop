@@ -22,15 +22,18 @@ class OrderStoreTest extends TestCase
     private function checkoutPayload(array $items, array $overrides = []): array
     {
         return array_merge([
-            'first_name'   => 'Pera',
-            'last_name'    => 'Perić',
-            'address'      => 'Bulevar oslobođenja 1',
-            'email'        => 'pera@example.com',
-            'city'         => 'Novi Sad',
-            'postal_code'  => '21000',
-            'phone'        => '0601234567',
-            'notes'        => null,
-            'items'        => $items,
+            'email' => 'pera@example.com',
+            'shipping' => [
+                'recipient_name' => 'Pera Perić',
+                'phone' => '0601234567',
+                'line1' => 'Bulevar oslobođenja 1',
+                'line2' => null,
+                'city' => 'Novi Sad',
+                'postal_code' => '21000',
+                'country' => 'Srbija',
+            ],
+            'notes' => null,
+            'items' => $items,
             'payment_method' => 'cod',
         ], $overrides);
     }

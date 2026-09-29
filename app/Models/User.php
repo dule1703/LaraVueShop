@@ -52,4 +52,14 @@ class User extends Authenticatable
     {
         return $this->hasOne(Cart::class);
     }
+
+    /**
+     * Sačuvane adrese isporuke. Svaki pristup pojedinačnoj adresi ide kroz ovu
+     * relaciju ($user->addresses()->findOrFail($id)), nikad Address::find() —
+     * IDOR zaštita (tuđa adresa izgleda isto kao nepostojeća).
+     */
+    public function addresses()
+    {
+        return $this->hasMany(Address::class);
+    }
 }
