@@ -24,6 +24,10 @@ const submit = () => {
     <GuestLayout>
         <Head title="Register" />
 
+        <h1 class="mb-6 font-serif text-2xl font-semibold text-brand-text-primary">
+            Registracija
+        </h1>
+
         <form @submit.prevent="submit">
             <div>
                 <InputLabel for="name" value="Name" />

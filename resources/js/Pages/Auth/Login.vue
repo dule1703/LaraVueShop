@@ -33,6 +33,10 @@ const submit = () => {
     <GuestLayout>
         <Head title="Log in" />
 
+        <h1 class="mb-6 font-serif text-2xl font-semibold text-brand-text-primary">
+            Prijavite se
+        </h1>
+
         <div v-if="status" class="mb-4 text-sm font-medium text-green-600">
             {{ status }}
         </div>
