@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Order;
+use App\Http\Controllers\AddressController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Admin\CategoryController;
@@ -30,6 +31,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Sačuvane adrese — {address} je običan int (bez implicitnog model binding-a),
+    // lookup ide kroz $user->addresses() u AddressController-u (IDOR zaštita).
+    Route::post('/profile/addresses', [AddressController::class, 'store'])->name('addresses.store');
+    // whereNumber: nenumerički {address} -> 404, ne TypeError (500) na int parametru.
+    Route::patch('/profile/addresses/{address}', [AddressController::class, 'update'])->whereNumber('address')->name('addresses.update');
+    Route::delete('/profile/addresses/{address}', [AddressController::class, 'destroy'])->whereNumber('address')->name('addresses.destroy');
+    Route::patch('/profile/addresses/{address}/default', [AddressController::class, 'setDefault'])->whereNumber('address')->name('addresses.setDefault');
 });
 
 require __DIR__.'/auth.php';
@@ -50,8 +59,13 @@ Route::middleware(['auth', 'admin'])
         });
 
 // Checkout route
-Route::get('/checkout', function () {
-    return Inertia::render('Checkout');
+// Ulogovan korisnik dobija svoje sačuvane adrese (podrazumevana prva); gost prazan niz.
+Route::get('/checkout', function (Request $request) {
+    return Inertia::render('Checkout', [
+        'addresses' => $request->user()
+            ? $request->user()->addresses()->orderByDesc('is_default')->orderByDesc('id')->get()
+            : [],
+    ]);
 })->name('checkout');
 
 // PayPal rute

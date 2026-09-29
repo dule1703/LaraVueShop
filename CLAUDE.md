@@ -1114,12 +1114,148 @@ ovde samo kako sad radi.)
   "zakači" dok se ne skroluje, provera na scroll=0 daje lažan utisak da
   panel ne staje u viewport).
 
+## Dizajn — Cart/Checkout redizajn + sačuvane adrese (Faza 6, korak 4)
+Spaja vizuelni redizajn `Cart.vue`/`Checkout.vue` (brand-* tokeni, Lora
+naslovi, srpski tekst — obe stranice su do sada bile na engleskom, jedini
+preostali izuzetak od Faze 6) sa novom funkcionalnošću sačuvanih adresa
+(`addresses` tabela), kako je i najavljeno u prethodnoj verziji ovog fajla.
+Rađeno kroz dva paralelna pod-zadatka (backend Opus, frontend Sonnet — vidi
+"Sub-agent pravila" gore, IDOR-osetljiv deo je razlog za Opus).
+
+### Data model
+- `addresses` — `user_id` (FK users, `cascadeOnDelete`), `recipient_name`,
+  `phone`, `line1`, `line2` (nullable), `city`, `postal_code`, `country`
+  (default `'Srbija'`), `is_default` (boolean).
+- `orders` dobija paralelne `shipping_*` snapshot kolone (`shipping_
+  recipient_name/phone/line1/line2/city/postal_code/country`, sve nullable)
+  + `shipping_address_id` (nullable FK → `addresses`, `nullOnDelete`, **čist
+  audit trag** — prikaz porudžbine čita isključivo `shipping_*` kolone,
+  nikad `shippingAddress` relaciju, isti princip kao `product_name`/
+  `product_price` na `order_items`).
+- **Namerni dual-write, ne propust:** `OrderController::store` i dalje puni
+  i STARE `orders` kolone (`first_name`, `last_name`, `address`, `city`,
+  `postal_code`, `phone`) za svaku novu porudžbinu — `Admin/Orders/Index.vue`
+  i `Show.vue` ih i dalje čitaju direktno i nisu dirani ovim korakom.
+  `first_name`/`last_name` se dobijaju naivnim split-om `recipient_name`-a na
+  prvi razmak (dokumentovano pojednostavljenje — `Address` model namerno ima
+  samo jedno `recipient_name` polje, ne odvojeno ime/prezime, pa višedelna
+  imena mogu da se podele "pogrešno", npr. "Jovan Petar Jovanović" →
+  first="Jovan", last="Petar Jovanović"; nema pouzdanog načina da se to
+  izbegne bez kršenja zadatog Address modela).
+
+### `app/Services/AddressService.php`
+Isti obrazac kao `BookService`/`InventoryService` — sva upisivanja idu
+isključivo odavde:
+- `create()` — prva adresa korisnika je UVEK podrazumevana (nema druge u
+  odnosu na koju bi bila "ne-podrazumevana"), bez obzira na `is_default` iz
+  zahteva; svaka sledeća ide kroz `setDefault()` ako je `is_default`
+  tražen.
+- `update()` — `is_default` se namerno NE upisuje direktno (uvek preko
+  `setDefault()`, jedino mesto koje garantuje "najviše jedna podrazumevana
+  po korisniku").
+- `setDefault()` — `DB::transaction`, skida `is_default` sa svih ostalih
+  adresa korisnika pa postavlja na ovu.
+- `delete()` — namerno NE unapređuje drugu adresu u podrazumevanu (produktna
+  odluka, ne propust — korisnik sam bira sledeću).
+
+### IDOR zaštita — `AddressController` (isti princip kao Faza 0, problem #5)
+Svaki lookup ide kroz `$request->user()->addresses()->findOrFail($id)`
+(relaciono skopiran upit), **nikad** `Address::find($id)` niti implicitni
+`{address}` route-model-binding (zato je parametar rute običan `int`, ne
+`Address` type-hint — implicitno bindovanje bi razrešilo adresu globalno,
+preko svih korisnika, PRE bilo kakve provere). Tuđa i nepostojeća adresa
+daju identičnu 404 (ne otkriva se koji ID postoji). `Gate::authorize()`
+posle lookup-a je odbrana u dubini (bazni `Controller` u ovom Laravel 12
+skeletu nema `AuthorizesRequests` trait, pa `$this->authorize()` ne postoji
+— `Gate::authorize()` radi identično). `AddressPolicy` (view/update/delete,
+`$address->user_id === $user->id`) je auto-discovered po konvenciji
+(`App\Models\Address` → `App\Policies\AddressPolicy`), isto kao `OrderPolicy`
+— nema ručne registracije, u ovom repo-u ne postoji `AuthServiceProvider`.
+Rute: `POST /profile/addresses`, `PATCH /profile/addresses/{address}`,
+`DELETE /profile/addresses/{address}`, `PATCH /profile/addresses/{address}/
+default` — u postojećoj `auth` grupi pored `profile.*` ruta,
+`whereNumber('address')` na sve tri `{address}` rute (nenumerički ID bi bez
+toga bacio `TypeError`/500 na `int` parametru umesto 404).
+
+### `OrderController::store` — novi oblik zahteva
+Zamenjuje stare ravne `first_name/last_name/address/city/postal_code/phone`
+prop bilo ILI `address_id` (ID sačuvane adrese ULOGOVANOG korisnika) ILI
+`shipping.{recipient_name,phone,line1,line2,city,postal_code,country}`
+(obavezno kad `address_id` nedostaje — `required_without:address_id`).
+- **Gost nikad ne sme da pošalje `address_id`** (isti IDOR oblik kao Faza 0,
+  problem #5) — ako pošalje, `ValidationException` na `address_id`, PRE
+  bilo kakvog upisa u bazu.
+- Ulogovan korisnik: `address_id` se razrešava isključivo kroz
+  `Auth::user()->addresses()->find($id)` (relaciono skopirano) — tuđa i
+  nepostojeća adresa daju **istu** poruku greške.
+- `save_address` (checkbox "Sačuvaj kao podrazumevanu adresu") ima smisla
+  samo kad `address_id` NIJE poslat (nova inline adresa) i korisnik je
+  ulogovan — tada `AddressService::create(..., ['is_default' => true])` ide
+  u ISTOJ `DB::transaction` kao kreiranje porudžbine (ako porudžbina padne,
+  npr. nema zaliha, ni nova adresa ne ostaje).
+- `shipping_address_id` na kreiranoj porudžbini je ID sačuvane adrese kad je
+  korišćena (bilo postojeća preko `address_id`, bilo novosačuvana preko
+  `save_address`), inače `NULL` (jednokratna adresa, nije sačuvana).
+
+### Frontend
+- **`Checkout.vue`** — potpuno redizajniran (brand-* tokeni, srpski tekst).
+  `useForm` polja: `email, notes, payment_method, items, address_id,
+  save_address, shipping{...}`. Ulogovan korisnik SA sačuvanim adresama
+  vidi `<select>` (podrazumevana adresa je prva u nizu — backend šalje
+  default-first, unapred izabrana) + opciju "+ Nova adresa"; biranje realne
+  adrese sakriva inline polja. Ulogovan korisnik BEZ sačuvanih adresa i gost
+  (gost nikad ne vidi `<select>` niti checkbox — nema nalog na koji bi se
+  adresa sačuvala) idu direktno na inline polja. `onMounted` redosled
+  korpe (`cart.loadFromBackend()` pa `cart.hydrate()`) je NEDIRAN — vidi
+  "Korpa — refaktor..." gore, dve prethodne trke rešene tim redosledom.
+- **`Cart.vue`** — samo vizuelni/tekstualni redizajn (brand-* tokeni, srpski
+  tekst), logika i `onMounted` redosled nedirani. `<a href="/checkout">`
+  namerno ostaje pun (ne-SPA) link, ne Inertia `<Link>` — `/checkout` ionako
+  treba svež `addresses` prop sa servera pri svakom ulasku.
+- **`Profile/Edit.vue`** — nova sekcija preko
+  `resources/js/Pages/Profile/Partials/AddressManagement.vue` (lista adresa
+  kao kartice, značka "Podrazumevana", modal za dodavanje/izmenu — deli
+  jednu `Modal.vue` instancu za oba moda preko `editingAddress` ref-a, isti
+  obrazac kao `DeleteUserForm.vue`). Brisanje ide preko `window.confirm()`
+  (ne `DeleteConfirmation.vue` — njen API, građen oko `deleteUrl` stringa i
+  internog `router.delete()`, se nije uklopio sa "svaka akcija sopstveni
+  `useForm()`" obrascem ostatka komponente). `ProfileController::edit` i
+  `/checkout` ruta sada šalju `addresses` prop (`$user->addresses()->
+  orderByDesc('is_default')->orderByDesc('id')->get()` — podrazumevana
+  prva); gost na `/checkout` dobija prazan niz. Ostale 3 Profile sekcije
+  (`UpdateProfileInformationForm`, `UpdatePasswordForm`, `DeleteUserForm`)
+  NISU redizajnirane (i dalje `text-gray-*`) — nova sekcija namerno ne
+  prelazi potpuno na brand-* naslove da ne bi vizuelno odudarala od suseda;
+  koristi `bg-brand-card` kartice i `text-brand-accent` akcente, ali
+  zadržava `text-gray-900`/`text-gray-600` za header tekst iz istog razloga.
+- Flash poruke (`page.props.flash.success/error`) — isti obrazac kao admin
+  `Index.vue` stranice, dodate na `Checkout.vue` i `Profile/Edit.vue` jer
+  adresne akcije sad redirect-uju nazad sa flash porukom.
+
+### Testovi
+Backend: `tests/Feature/Profile/AddressManagementTest.php` (16 — CRUD, prva
+adresa uvek default, `setDefault` skida prethodnu, IDOR na sve tri
+`{address}` rute vraća 404 i ne menja tuđu adresu, gost redirect na login,
+validacija), `tests/Feature/Checkout/CheckoutAddressTest.php` (16 —
+checkout sa `address_id`, checkout sa inline `shipping` + `save_address`,
+tuđa/nepostojeća adresa daje 422 bez kreiranja porudžbine, gost sa
+`address_id` daje 422, **snapshot immutability**: izmena/brisanje sačuvane
+adrese POSLE porudžbine ne menja `shipping_*` kolone te porudžbine, legacy
+kolone i dalje popunjene). `tests/Feature/OrderStoreTest.php`/
+`OrderAccessTest.php` — postojeći testovi prebačeni na novi (`shipping{...}`)
+oblik zahteva, nijedna asercija menjana. `php artisan test`: **380 passed**
+(348 + 32 nova).
+Frontend: `resources/js/Pages/Checkout.test.js` (4 — podrazumevana adresa
+unapred izabrana i sakriva inline polja, "+ Nova adresa" otkriva inline
+polja + checkbox, gost vidi samo inline polja bez `<select>`/checkbox-a,
+ulogovan korisnik bez sačuvanih adresa preskače `<select>`),
+`resources/js/Pages/Profile/Partials/AddressManagement.test.js` (9 — lista
++ značka, prazno stanje, modal prefill za izmenu, `.post`/`.patch` sa
+tačnim payload-om i rutom, `.delete` uz potvrdu/otkazivanje, `setDefault`,
+dugme sakriveno na već-podrazumevanoj). `npm run test`: **46 passed** (33 +
+13 novih). `npx vite build` prolazi.
+
 ### Planirano/otvoreno
-- Kad se bude radio redizajn Cart/Checkout stranice, tada dodati i
-  funkcionalnost sačuvanih adresa: `addresses` tabela, predpopunjavanje
-  checkout forme za ulogovane korisnike, checkbox "sačuvaj kao podrazumevanu
-  adresu", profile stranica dobija sekciju za upravljanje adresama. **Ne
-  raditi sada** — samo zabeleženo da ne bude zaboravljeno kad dođe taj korak.
 - **Odluka na čekanju:** da li Breeze auth stranice (`GuestLayout.vue`)
   dobijaju punu nav traku (kao `AuthenticatedLayout.vue`) ili ostaju na
   minimalnom centriranom layoutu bez navigacije — vidi "header/navigacija

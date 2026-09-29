@@ -107,13 +107,16 @@ class OrderAccessTest extends TestCase
         ]);
 
         $payload = [
-            'first_name' => 'Gost',
-            'last_name' => 'Kupac',
-            'address' => 'Bulevar oslobođenja 1',
             'email' => 'gost@example.com',
-            'city' => 'Novi Sad',
-            'postal_code' => '21000',
-            'phone' => '0601234567',
+            'shipping' => [
+                'recipient_name' => 'Gost Kupac',
+                'phone' => '0601234567',
+                'line1' => 'Bulevar oslobođenja 1',
+                'line2' => null,
+                'city' => 'Novi Sad',
+                'postal_code' => '21000',
+                'country' => 'Srbija',
+            ],
             'notes' => null,
             'items' => [
                 ['id' => $product->id, 'quantity' => 1],
@@ -141,13 +144,16 @@ class OrderAccessTest extends TestCase
         ]);
 
         $payload = [
-            'first_name' => 'Gost',
-            'last_name' => 'Kupac',
-            'address' => 'Bulevar oslobođenja 1',
             'email' => 'gost@example.com',
-            'city' => 'Novi Sad',
-            'postal_code' => '21000',
-            'phone' => '0601234567',
+            'shipping' => [
+                'recipient_name' => 'Gost Kupac',
+                'phone' => '0601234567',
+                'line1' => 'Bulevar oslobođenja 1',
+                'line2' => null,
+                'city' => 'Novi Sad',
+                'postal_code' => '21000',
+                'country' => 'Srbija',
+            ],
             'notes' => null,
             'items' => [
                 ['id' => $product->id, 'quantity' => 1],

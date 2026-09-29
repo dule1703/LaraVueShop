@@ -22,7 +22,24 @@ class Order extends Model
         'status',
         'payment_method',
         'customer_email',
+        'shipping_recipient_name',
+        'shipping_phone',
+        'shipping_line1',
+        'shipping_line2',
+        'shipping_city',
+        'shipping_postal_code',
+        'shipping_country',
+        'shipping_address_id',
     ];
+
+    /**
+     * Samo audit trag (koja sačuvana adresa je izabrana). Za prikaz porudžbine
+     * se NIKAD ne koristi — izvor istine su shipping_* snapshot kolone.
+     */
+    public function shippingAddress()
+    {
+        return $this->belongsTo(Address::class, 'shipping_address_id');
+    }
 
     public function items()
     {

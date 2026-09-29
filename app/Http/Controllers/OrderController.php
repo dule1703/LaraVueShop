@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\StockMovement;
+use App\Services\AddressService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -20,21 +21,80 @@ class OrderController extends Controller
         // Napomena: cena i total_price se NAMERNO ne uzimaju od klijenta.
         // Server ih računa iz baze (products.price) u transakciji ispod.
         $validated = $request->validate([
-            'first_name'   => 'required|string|max:255',
-            'last_name'    => 'required|string|max:255',
-            'address'      => 'required|string|max:255',
             'email'        => 'required|email|max:255',
-            'city'         => 'required|string|max:255',
-            'postal_code'  => 'required|string|max:20',
-            'phone'        => 'required|string|max:50',
             'notes'        => 'nullable|string',
             'items'        => 'required|array|min:1',
             'items.*.id'   => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
             'payment_method' => 'required|in:paypal,cod',
+            // Adresa isporuke: ILI id sačuvane adrese ulogovanog korisnika, ILI
+            // inline shipping.* polja (gost, ili ulogovan korisnik sa novom adresom).
+            'address_id'   => 'nullable|integer',
+            'save_address' => 'nullable|boolean',
+            'shipping'                => 'nullable|array',
+            'shipping.recipient_name' => 'required_without:address_id|string|max:255',
+            'shipping.phone'          => 'required_without:address_id|string|max:50',
+            'shipping.line1'          => 'required_without:address_id|string|max:255',
+            'shipping.line2'          => 'nullable|string|max:255',
+            'shipping.city'           => 'required_without:address_id|string|max:255',
+            'shipping.postal_code'    => 'required_without:address_id|string|max:20',
+            'shipping.country'        => 'nullable|string|max:255',
         ]);
 
-        $order = DB::transaction(function () use ($validated) {
+        // Provera vlasništva adrese PRE bilo kakvog upisa (isti princip "proveri pre
+        // nego što išta dirneš" kao i server-side cena). Gost nikad ne sme da
+        // referencira address_id (isti IDOR oblik kao Faza 0, problem #5); za
+        // ulogovanog korisnika lookup je kroz relaciju — tuđa i nepostojeća adresa
+        // daju ISTU poruku, da se ne otkrije koji ID postoji.
+        $savedAddress = null;
+        $addressId = $validated['address_id'] ?? null;
+
+        if ($addressId !== null) {
+            if (Auth::guest()) {
+                throw ValidationException::withMessages([
+                    'address_id' => 'Adresa je dostupna samo za ulogovane korisnike.',
+                ]);
+            }
+
+            $savedAddress = Auth::user()->addresses()->find($addressId);
+
+            if (! $savedAddress) {
+                throw ValidationException::withMessages([
+                    'address_id' => 'Adresa ne postoji ili ne pripada vašem nalogu.',
+                ]);
+            }
+        }
+
+        $shippingSnapshot = $savedAddress
+            ? $savedAddress->only(['recipient_name', 'phone', 'line1', 'line2', 'city', 'postal_code', 'country'])
+            : [
+                'recipient_name' => $validated['shipping']['recipient_name'],
+                'phone'          => $validated['shipping']['phone'],
+                'line1'          => $validated['shipping']['line1'],
+                'line2'          => $validated['shipping']['line2'] ?? null,
+                'city'           => $validated['shipping']['city'],
+                'postal_code'    => $validated['shipping']['postal_code'],
+                'country'        => $validated['shipping']['country'] ?? null,
+            ];
+        $shippingSnapshot['line2'] = filled($shippingSnapshot['line2'] ?? null) ? $shippingSnapshot['line2'] : null;
+        $shippingSnapshot['country'] = filled($shippingSnapshot['country'] ?? null) ? $shippingSnapshot['country'] : 'Srbija';
+
+        // "Sačuvaj kao adresu" ima smisla samo za NOVU inline adresu ulogovanog korisnika.
+        $shouldSaveAddress = ! $savedAddress && Auth::check() && ! empty($validated['save_address']);
+
+        $order = DB::transaction(function () use ($validated, $shippingSnapshot, $savedAddress, $shouldSaveAddress) {
+            $shippingAddressId = $savedAddress?->id;
+
+            // U ISTOJ transakciji kao porudžbina — ako porudžbina padne (npr. nema
+            // zaliha), ni nova sačuvana adresa ne ostaje.
+            if ($shouldSaveAddress) {
+                $newAddress = app(AddressService::class)->create(
+                    Auth::user(),
+                    $shippingSnapshot + ['is_default' => true]
+                );
+                $shippingAddressId = $newAddress->id;
+            }
+
             $totalPrice = 0;
             $orderItems = [];
 
@@ -70,14 +130,36 @@ class OrderController extends Controller
                 $totalPrice += $product->price * $item['quantity'];
             }
 
+            // Legacy first_name/last_name kolone (Admin/Orders/*.vue i dalje čitaju samo njih
+            // direktno, van opsega ovog koraka da se diraju) nemaju odgovarajuće polje u novom
+            // Address modelu (samo recipient_name) — naivan split na PRVI razmak, dokumentovano
+            // pojednostavljenje (višedelna imena mogu da završe podeljena "pogrešno", npr. "Jovan
+            // Petar Jovanović" -> first="Jovan", last="Petar Jovanović" — nema pouzdanog načina
+            // da se to razdvoji bez traženja odvojenih first/last polja, što bi kršilo zadati
+            // Address data model, gde je recipient_name namerno jedno polje).
+            $parts = explode(' ', trim($shippingSnapshot['recipient_name']), 2);
+            $legacyFirstName = $parts[0];
+            $legacyLastName = $parts[1] ?? '';
+
             $order = Order::create([
                 'user_id'         => Auth::id(),
-                'first_name'      => $validated['first_name'],
-                'last_name'       => $validated['last_name'],
-                'address'         => $validated['address'],
-                'city'            => $validated['city'],
-                'postal_code'     => $validated['postal_code'],
-                'phone'           => $validated['phone'],
+                // Namerni dual-write: stare kolone se i dalje pune (admin prikaz porudžbina
+                // ih čita direktno), nove shipping_* su izvor istine za snapshot.
+                'first_name'      => $legacyFirstName,
+                'last_name'       => $legacyLastName,
+                'address'         => $shippingSnapshot['line1'] . ($shippingSnapshot['line2'] ? ', ' . $shippingSnapshot['line2'] : ''),
+                'city'            => $shippingSnapshot['city'],
+                'postal_code'     => $shippingSnapshot['postal_code'],
+                'phone'           => $shippingSnapshot['phone'],
+                'shipping_recipient_name' => $shippingSnapshot['recipient_name'],
+                'shipping_phone'          => $shippingSnapshot['phone'],
+                'shipping_line1'          => $shippingSnapshot['line1'],
+                'shipping_line2'          => $shippingSnapshot['line2'] ?? null,
+                'shipping_city'           => $shippingSnapshot['city'],
+                'shipping_postal_code'    => $shippingSnapshot['postal_code'],
+                'shipping_country'        => $shippingSnapshot['country'],
+                // Samo audit trag — prikaz porudžbine čita isključivo shipping_* kolone.
+                'shipping_address_id'     => $shippingAddressId,
                 'notes'           => $validated['notes'] ?? null,
                 'total_price'     => $totalPrice,
                 'status'          => 'pending',
