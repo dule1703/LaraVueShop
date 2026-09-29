@@ -540,3 +540,129 @@ ulogovan korisnik bez sačuvanih adresa preskače `<select>`),
 tačnim payload-om i rutom, `.delete` uz potvrdu/otkazivanje, `setDefault`,
 dugme sakriveno na već-podrazumevanoj). `npm run test`: **46 passed** (33 +
 13 novih). `npx vite build` prolazi.
+
+---
+
+## Dizajn — Breeze auth (Faza 6, korak 5)
+Poslednji redizajn korak u dogovorenom redosledu (Shop/Product → Cart/
+Checkout → Breeze auth → admin panel, koji ostaje van opsega — nije
+dogovoren).
+
+### Odluka: GuestLayout ostaje minimalan, ne dobija nav traku
+Otvoreno pitanje iz koraka 2 (`AuthenticatedLayout.vue` i `GuestLayout.vue`
+nisu ista komponenta, `GuestLayout` nema navigaciju) je rešeno eksplicitnom
+korisničkom odlukom, ne istraživanjem — dobijena je kao gotov zahtev pre
+implementacije, ne kao nešto što je ovaj korak sam otkrio/odmerio. Razlog
+nije dokumentovan van same odluke (verovatno: auth stranice su namerno
+fokusiran, izolovan flow — puna nav traka sa cart bedžom/pretragom bi
+odvlačila pažnju sa login/register forme). Dodato je samo minimalno: link
+"Nazad u prodavnicu" (`/shop`) + zadržan postojeći Logo (link ka `/`).
+
+### Kontrast: brand-header umesto brand-page za pozadinu
+Task je eksplicitno tražio probu oba kandidata (`--brand-page-bg: #FFFCF8`
+i `--brand-header-bg: #E4CBAE`) i zadržavanje onog koji bolje kontrastira sa
+belom (`bg-white`) karticom forme. `brand-page-bg` je vizuelno gotovo
+identična beloj pozadini (razlika je ~1-2 nijanse u kanalu, ispod praga
+opažljivosti na običnom monitoru) — karta bi "nestala" u pozadinu, gubi se
+vizuelna granica forme. `brand-header-bg` je jasno tamnija/toplija nijansa
+(vidljiva u screenshotu ispod), daje jasnu granicu oko bele kartice I
+dodatno vizuelno vezuje auth stranice za identičnu boju trake koju
+`AuthenticatedLayout.vue` nav koristi (Faza 6, korak 2) — auth stranice
+"izgledaju kao deo istog sajta" umesto izolovanog ekrana. Tekst linka/Logo-a
+koristi `text-brand-header-text` (#6B4423) — isti par tokena kao nav traka,
+kontrast već proveren i dokumentovan u koraku 2, nije ponovo računat ovde
+(reuse odluke, ne nova provera).
+
+Nije probana treća opcija (bez ijednog `--brand-*` tokena, npr. plain
+`bg-white` sa border-om oko kartice) — task je eksplicitno ograničio izbor
+na `brand-page`/`brand-header`, van opsega da se predlaže treća.
+
+### Naslovi po stranici — otkriveno da ne postoje
+Pre ovog koraka nijedna od 6 auth stranica nije imala vidljiv naslov u
+kartici — samo `<Head title="Log in">` i sl. (menja `<title>` u browser
+tabu, nevidljivo u samom UI-ju). Task-ov "Stil" odeljak eksplicitno traži
+`font-serif` naslove "Prijavite se"/"Registracija", što implicira da naslov
+treba da POSTOJI, ne samo da se stilizuje ako već postoji. Ovo je jedino
+mesto gde je ovaj korak dirao svaku auth stranicu pojedinačno (uprkos
+"SCOPE" napomeni da se stranice ne diraju kad deljene komponente pokrivaju
+sve) — naslov je nužno tekst specifičan za stranicu, ne može živeti u
+deljenoj komponenti. Dodato: `<h1 class="mb-6 font-serif text-2xl
+font-semibold text-brand-text-primary">` sa srpskim tekstom na svih 6
+stranica (Login "Prijavite se", Register "Registracija", ForgotPassword
+"Zaboravljena lozinka", ResetPassword "Nova lozinka", VerifyEmail "Potvrda
+email adrese", ConfirmPassword "Potvrdite lozinku") — ostatak teksta na tim
+stranicama (labele, poruke, dugmad) OSTAJE na engleskom, nije preveden;
+ovaj korak nije "prevedi Breeze na srpski", samo naslovi iz task opisa.
+
+### Deljene komponente i posledica na Profile
+`TextInput.vue`, `InputLabel.vue`, `PrimaryButton.vue`, `SecondaryButton.vue`,
+`Checkbox.vue` su prešle sa `indigo-*`/`gray-*` na brand-* tokene
+(`border-black/20`, `focus:border-brand-accent`, `focus:ring-brand-accent`,
+`text-brand-text-primary`, `bg-brand-accent`/`hover:bg-brand-accent-hover`).
+`InputError.vue` namerno nije diran — provera: karta na kojoj se ove
+komponente prikazuju je UVEK bela (i na auth stranicama i na Profile-u),
+`text-red-600` na beloj pozadini već prolazi WCAG AA (~4.8:1), nema
+scenarija u ovom repo-u gde bi crvena greška sela na tamnu brand pozadinu.
+
+Pre izmene je grep-om potvrđeno (task je eksplicitno tražio proveru, ne
+pretpostavku) da ove komponente NISU izolovane na auth stranice — koristi ih
+i `Profile/Partials/UpdateProfileInformationForm.vue`,
+`UpdatePasswordForm.vue`, `DeleteUserForm.vue` (`SecondaryButton` na Cancel
+dugmetu) i `AddressManagement.vue` (modal iz Faze 6 koraka 4). Ovo je
+POSLEDICA, ne greška: ta 3 Profile partiala (koji od koraka 4 svesno NISU
+redizajnirani — vidi gore, "NISU redizajnirane i dalje text-gray-*") sada
+imaju brand-obojene inpute/dugmad, dok im naslovi (`text-gray-900`) ostaju
+nedirani. Rezultat je delimično brand-stilizovan Profile — isto poznato
+ograničenje kao u koraku 4, samo malo dublje (ranije je odudarao ceo
+`AddressManagement.vue` blok, sad odudaraju samo naslovi/tekst dok su
+inputi/dugmad ujednačeni). `AddressManagement.vue` je dobio čist bonus:
+njegov `TextInput` je od koraka 4 tiho koristio stari `indigo-500` fokus
+prsten unutar inače brand-stilizovanog modala (previd tog koraka, ne
+primećen tada) — sad je usklađen bez dodatne izmene.
+
+**`Checkbox.vue` forms-plugin gotcha** (isti mehanizam kao "Samo na stanju"
+checkbox iz koraka 3, CLAUDE.md Stack/`@tailwindcss/forms` napomena):
+`text-brand-accent` na golom `<input type="checkbox">` nema efekta bez
+`form-checkbox` klase (`@tailwindcss/forms` je `strategy: 'class'`, opt-in
+po klasi). Originalni `Checkbox.vue` (`rounded border-gray-300
+text-indigo-600 shadow-sm focus:ring-indigo-500`) je zato VEĆ imao isti
+"tiho ne radi" problem i pre ovog koraka — `text-indigo-600` nikad nije
+imao efekta, checkbox je uvek bio na browser-default plavoj kvačici. Task
+ovo nije eksplicitno tražio da se popravi, ali je logična posledica prelaska
+na brand boje (bez `form-checkbox` bi `text-brand-accent` isto tiho ne
+radio, ostavljajući identičan pre-postojeći bag). Rešenje: kopiran tačan,
+već-vetovan string iz `Shop.vue`/`Checkout.vue`/`AddressManagement.vue`
+(`form-checkbox h-4 w-4 rounded border-black/20 text-brand-accent
+focus:ring-brand-accent`, potvrđeno grep-om pre izmene) umesto smišljanja
+novog — konzistentnost sa tri postojeća mesta.
+
+### Forms plugin — potvrđena pretpostavka iz task opisa
+Task je pretpostavio da `TextInput.vue`/`Checkbox.vue` treba stilizovati
+direktno (border/focus/tekst) umesto oslanjanja na `@tailwindcss/forms`
+`'base'`/`'class'` reset, uz napomenu da javim ako pri implementaciji
+zaključim suprotno. Nije bilo razloga za odstupanje: plugin ostaje
+rezervisan za `form-checkbox` slučaj (opisano gore), a text inputi rade
+identično sa direktnim `border-*`/`focus:*` klasama kao što je Shop.vue
+filter panel već radio bez plugina — nema novog razloga da se to menja ovde.
+
+### Testovi i verifikacija
+Nijedan `tests/Feature/Auth/*.php` test ne asertuje na render-ovani
+markup/tekst (grep pre pretpostavke, kako je task tražio — svi su Inertia
+component-prop/redirect asercije), pa dodavanje `<h1>` naslova i promena CSS
+klasa nije moglo da ih pokvari. Potvrđeno pokretanjem: `php artisan test
+--filter=Auth` (52 passed, svih 6 Breeze fajlova + ostali Auth-vezani
+testovi), pa pun `php artisan test` (**380 passed**, nepromenjeno —
+backend nije diran ovim korakom). `npm run test` (**49 passed**, nepromenjeno
+— čist CSS/markup redizajn nema novu logiku koju bi trebalo testirati).
+`npx vite build` prolazi bez grešaka.
+
+Vizuelna provera: headless Chrome (`chrome.exe --headless=new
+--disable-gpu --screenshot=... --window-size=...`, isti mehanizam kao CDP
+provere u ranijim koracima, ovde bez interaktivnog CDP protokola jer je
+provera bila statična — samo render, bez klikova/fokusa) protiv `php
+artisan serve` na `/login` i `/register`: potvrđen kontrast
+`brand-header`/bela karta, čitljivost naslova (font-serif), boja
+primarnog dugmeta, izgled checkbox-a. Login/Register su bili dovoljni
+uzorak — preostale 4 stranice dele identičnu `GuestLayout.vue` +
+identične deljene komponente, nema stranično-specifičnog CSS-a koji bi
+zahtevao poseban screenshot.
