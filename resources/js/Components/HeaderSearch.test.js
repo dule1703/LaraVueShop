@@ -115,4 +115,36 @@ describe('HeaderSearch', () => {
         expect(params.page).toBeUndefined();
         expect(params).toEqual({ category: 'romani', search: 'seobe' });
     });
+
+    it('X dugme je vidljivo samo kad polje ima tekst', async () => {
+        const wrapper = mountSearch('/shop?category=romani', 'shop');
+
+        expect(wrapper.find('button[aria-label="Obriši pretragu"]').exists()).toBe(false);
+
+        await wrapper.find('input').setValue('seobe');
+        expect(wrapper.find('button[aria-label="Obriši pretragu"]').exists()).toBe(true);
+    });
+
+    it('X dugme prazni polje BEZ navigacije kad search nije bio aktivan URL filter', async () => {
+        const wrapper = mountSearch('/shop?category=romani', 'shop');
+
+        await wrapper.find('input').setValue('seobe');
+        await wrapper.find('button[aria-label="Obriši pretragu"]').trigger('click');
+
+        expect(wrapper.find('input').element.value).toBe('');
+        expect(router.get).not.toHaveBeenCalled();
+    });
+
+    it('X dugme prazni polje I navigira na shop BEZ ?search=, čuvajući ostale filtere, kad je search bio aktivan URL filter', async () => {
+        const wrapper = mountSearch('/shop?search=andric&category=romani', 'shop');
+
+        await wrapper.find('button[aria-label="Obriši pretragu"]').trigger('click');
+
+        expect(wrapper.find('input').element.value).toBe('');
+        expect(router.get).toHaveBeenCalledTimes(1);
+        const [url, params] = router.get.mock.calls[0];
+        expect(url).toBe('shop');
+        expect(params).toEqual({ category: 'romani' });
+        expect(params.search).toBeUndefined();
+    });
 });

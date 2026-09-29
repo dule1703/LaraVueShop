@@ -51,6 +51,18 @@ function submit() {
     router.get(route('shop'), Object.fromEntries(params), { preserveState: true, preserveScroll: true });
     emit('submitted');
 }
+
+// X dugme uvek prazni polje; navigaciju (uklanjanje ?search= iz URL-a, isti
+// router.get() obrazac kao submit()) pokreće SAMO kad je search bio stvarno
+// aktivan filter (URL trenutno ima ?search=...) - ako je korisnik samo
+// otkucao nešto i nikad ga nije poslao (Enter), nema šta da se navigira,
+// samo se lokalno polje prazni.
+function clear() {
+    search.value = '';
+    if (searchParamFromUrl()) {
+        submit();
+    }
+}
 </script>
 
 <template>
@@ -65,5 +77,14 @@ function submit() {
             @keyup.enter="submit"
         />
         <font-awesome-icon :icon="['fas', 'search']" :class="iconClass" />
+        <button
+            v-if="search"
+            type="button"
+            aria-label="Obriši pretragu"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-brand-header-muted transition hover:text-brand-accent"
+            @click="clear"
+        >
+            ×
+        </button>
     </div>
 </template>

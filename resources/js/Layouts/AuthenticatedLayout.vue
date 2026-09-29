@@ -40,7 +40,7 @@ const cart = useCartStore();
             <!-- Search bar (desktop) -->
             <div class="hidden md:flex flex-1 max-w-xl mx-8 items-center">
               <HeaderSearch
-                input-class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-3 px-6 pl-12 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
+                input-class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-3 px-6 pl-12 pr-10 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
                 icon-class="absolute left-5 top-1/2 -translate-y-1/2 text-brand-header-muted text-lg"
               />
             </div>
@@ -133,7 +133,7 @@ const cart = useCartStore();
              (uklonjeno odatle) — jedno mesto za search na mobilnom. -->
         <div class="md:hidden border-t border-black/10 bg-brand-header px-4 py-3">
           <HeaderSearch
-            input-class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-2.5 px-4 pl-11 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
+            input-class="w-full bg-brand-page border border-transparent focus:border-brand-accent focus:ring-2 focus:ring-brand-accent rounded-3xl py-2.5 px-4 pl-11 pr-9 text-sm text-brand-text-primary placeholder:text-brand-header-muted transition-all"
             icon-class="absolute left-4 top-1/2 -translate-y-1/2 text-brand-header-muted"
           />
         </div>
