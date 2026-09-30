@@ -1042,6 +1042,87 @@ jer nijedan test nije slao `shipping.*` kao PRAZAN STRING uz `address_id`
   ODMAH i u `main`** (isti tok kao PR #76 jutros), ne čeka se sledeći redovni
   ciklus — produkcija je trenutno pokvarena za SVAKI ulogovan checkout sa
   sačuvanom adresom.
+  ✅ **Urađeno isti dan** — PR #77 merge-ovan u `develop`, pa odmah i u
+  `main` (PR #78). Produkcija je popravljena.
+
+## Dizajn — Admin panel, korak 1: Dashboard + Categories (pilot obrazac)
+Poslednji korak u dogovorenom redosledu redizajna (Shop/Product → Cart/
+Checkout → Breeze auth → **admin panel**). Categories je namerno prvi CRUD
+(3 fajla, bez image upload-a/relacija) — obrazac uspostavljen ovde
+(deljene komponente) se ponovo koristi u Products/Books, Authors/
+Publishers, Orders u narednim koracima.
+
+**Deo 1 — Dashboard.vue.** Ranije prazan stub ("Ulogovani ste!"). Sada:
+- `routes/web.php` `/dashboard` closure čita `$request->user()->role ===
+  'admin'` (isti mehanizam kao `EnsureUserIsAdmin` middleware — `users.role`
+  kolona, ne novi autorizacioni sistem) i za admina računa 4 READ-ONLY COUNT
+  upita (`stats` prop): `total_orders`, `pending_orders` (`status =
+  'pending'`), `total_products`, `low_stock_products` (`stock IS NOT NULL
+  AND stock < 5` — isti prag kao `BookController::
+  DEFAULT_LOW_STOCK_THRESHOLD` iz Faze 5, ne izmišljen novi broj). Za
+  ne-admina `stats` je `null`.
+- `Dashboard.vue`: `v-if="stats"` prikazuje 4 kartice (brand-* tokeni,
+  font-serif brojevi); kartica niske zalihe dobija amber isticanje kad je
+  `low_stock_products > 0`. `v-else` prikazuje prostu dobrodošlicu sa
+  imenom korisnika (`usePage().props.auth.user.name`).
+- Nema nove tabele/migracije — čisto čitanje postojećih `orders`/
+  `products` tabela.
+- Test: `tests/Feature/DashboardTest.php` (2 — admin vidi tačne brojke
+  preko seed-ovanih porudžbina/proizvoda, običan korisnik dobija
+  `stats: null`).
+
+**Deo 2 — deljene admin komponente** (`resources/js/Components/Admin/`),
+uspostavljene NA Categories, za ponovnu upotrebu u sledeća 3 koraka:
+- `AdminPageHeader.vue` — `title` prop (font-serif h1) + `#actions` slot
+  (dugme "+ Dodaj ...").
+- `AdminTable.vue` — `headers` (niz stringova za `<thead>`, `bg-brand-card`)
+  + default slot za `<tbody>` redove (pozivalac isporučuje `<tr>`/`<td
+  class="px-6 py-4">`) + `isEmpty`/`emptyMessage` za prazno stanje. Border
+  stil (`divide-y divide-black/5`), ne zebra — isti obrazac kao Checkout
+  cart lista/AddressManagement.
+- `StatusBadge.vue` — `active` (Boolean) → "Aktivno" (zeleno) / "Neaktivno"
+  (sivo, `bg-black/5`). Namerno NE brand-accent za status (jedna topla
+  boja ne nosi semantiku aktivno/neaktivno) — zeleno/sivo je čitljivije za
+  skeniranje tabele.
+- `Categories/Index.vue` koristi sve tri; `Categories/Create.vue`/
+  `Edit.vue` koriste POSTOJEĆE Breeze deljene forme komponente
+  (`InputLabel`/`TextInput`/`InputError`/`Checkbox`/`PrimaryButton`, već
+  brand-stilizovane od Faze 6 koraka 5) — nema duple stilizacije inputa.
+  `Otkaži` dugme je `<Link>` sa ručno kopiranim `SecondaryButton` klasama
+  (ne sam `SecondaryButton` — on renderuje `<button>`, ugnježden `<a>`
+  unutar `<button>` je nevalidan HTML i ne bi radio kao Inertia navigacija).
+- **`DeleteConfirmation.vue` DIRANA** (deljena, koristi je i Products/Books/
+  Authors/Publishers — pet admin sekcija odjednom, ne samo Categories):
+  prebačena na brand-* tokene, sad iznutra koristi stvarne
+  `SecondaryButton`/`DangerButton` komponente (manje duplog stila, crvena
+  boja za destruktivnu akciju nedirana — isti obrazac kao `DangerButton`
+  svuda drugde). Tekst preveden na srpski; poruka potvrde više NE koristi
+  `itemType` prop gramatički uklopljen u rečenicu (npr. "obrišite category
+  X" bi na srpskom zahtevalo padežnu deklinaciju po tipu — "kategoriju"/
+  "autora"/"izdavača" — fragilna mapa za 5 poziva); umesto toga generička
+  rečenica sa `itemName` u podebljanom tekstu ("Da li želite trajno da
+  obrišete **{{ itemName }}**?"), `itemType` prop ostaje deklarisan
+  (nekorišćen u tekstu) radi kompatibilnosti sa 5 postojećih poziva.
+  Ostale 4 admin sekcije (Products/Books/Authors/Publishers) i dalje imaju
+  stari indigo/engleski izgled OKO modala — prihvaćena privremena
+  nedoslednost dok ne dođu na red u narednim koracima (isti obrazac kao
+  `AddressManagement.vue` u Faza 6 koraku 4).
+- Backend flash poruke u `CategoryController` prevedene na srpski
+  ("Kategorija je uspešno dodata/izmenjena/obrisana.") — vidljive korisniku
+  preko istog `page.props.flash.success` mehanizma.
+- Tekst preveden: "Add New category"→"Dodaj kategoriju", "Edit"→"Izmeni",
+  "Actions"→"Akcije", "Active"/"Inactive"→"Aktivno"/"Neaktivno", itd.
+- Testovi: `tests/Feature/Admin/AdminAccessTest.php` (56 postojećih, nema
+  markup/tekst asercija — samo status kod/DB, redizajn ih nije mogao
+  pokvariti, potvrđeno pokretanjem). `php artisan test`: 384 passed (382 +
+  2 nova). `npm run test`: 52 passed (nepromenjeno — nema novih JS testova,
+  Vue komponente su nove ali bez postojeće vitest infrastrukture za admin
+  stranice u ovom koraku). `npx vite build` prolazi. Vizuelno provereno
+  (headless Chrome screenshot preko privremenih, necommit-ovanih preview
+  ruta — Dashboard sa lažnim brojkama, Categories Index/Create/Edit sa
+  pravim podacima iz dev baze — obrisane posle provere, nisu deo PR-a):
+  kontrast, font-serif naslovi, status bedževi, amber isticanje niske
+  zalihe.
 
 ## Planirano/otvoreno
 - **UX stavka (zabeleženo, nije rešeno):** `<select>` sačuvanih adresa na
