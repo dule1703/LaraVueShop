@@ -6,6 +6,7 @@ use App\Models\Author;
 use App\Models\Book;
 use App\Models\Publisher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Concerns\BuildsBookPayload;
 use Tests\TestCase;
@@ -27,21 +28,25 @@ class AuthorPublisherCrudTest extends TestCase
     public function test_admin_dodaje_autora_a_slug_se_generise_iz_cirilice(): void
     {
         $this->actingAs($this->admin())
-            ->post(route('admin.authors.store'), ['name' => 'Иво Андрић', 'slug' => '', 'bio' => 'Nobelovac.', 'photo' => 'https://example.com/ivo.jpg'])
+            ->post(route('admin.authors.store'), ['name' => 'Иво Андрић', 'slug' => '', 'bio' => 'Nobelovac.'])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.authors.index'));
 
         $this->assertDatabaseHas('authors', ['name' => 'Иво Андрић', 'slug' => 'ivo-andric', 'bio' => 'Nobelovac.']);
     }
 
-    public function test_autor_zahteva_ime_jedinstven_slug_i_ispravan_url_fotografije(): void
+    public function test_autor_zahteva_ime_jedinstven_slug_i_ispravan_tip_fotografije(): void
     {
         Author::factory()->create(['slug' => 'ivo-andric']);
         $admin = $this->admin();
 
         $this->actingAs($admin)->post(route('admin.authors.store'), ['name' => ''])->assertSessionHasErrors('name');
         $this->actingAs($admin)->post(route('admin.authors.store'), ['name' => 'Ivo Andrić'])->assertSessionHasErrors('slug');
-        $this->actingAs($admin)->post(route('admin.authors.store'), ['name' => 'Neko', 'photo' => 'nije-url'])->assertSessionHasErrors('photo');
+
+        $badFile = UploadedFile::fake()->create('dokument.pdf', 100, 'application/pdf');
+        $this->actingAs($admin)
+            ->post(route('admin.authors.store'), ['name' => 'Neko', 'photo' => $badFile])
+            ->assertSessionHasErrors('photo');
 
         $this->assertDatabaseCount('authors', 1);
     }
@@ -51,7 +56,7 @@ class AuthorPublisherCrudTest extends TestCase
         $author = Author::factory()->create(['slug' => 'stari-slug']);
 
         $this->actingAs($this->admin())
-            ->put(route('admin.authors.update', $author), ['name' => 'Novo Ime', 'slug' => 'stari-slug', 'bio' => null, 'photo' => null])
+            ->put(route('admin.authors.update', $author), ['name' => 'Novo Ime', 'slug' => 'stari-slug', 'bio' => null])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.authors.index'));
 
