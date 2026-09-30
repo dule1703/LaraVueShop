@@ -94,6 +94,43 @@ class CheckoutAddressTest extends TestCase
         $this->assertSame($address->id, $order->shipping_address_id);
     }
 
+    /**
+     * Regresija (produkcijski bag): Checkout.vue UVEK šalje shipping.* kao
+     * prazne stringove preko useForm-a, čak i kad je address_id popunjen i
+     * inline polja skrivena (v-if="showInlineFields") — ne izostavljene, ne
+     * null, doslovno ''. Laravel-ov default ConvertEmptyStringsToNull
+     * middleware to pretvara u null PRE validacije; required_without prolazi
+     * (address_id postoji), ali 'string' pravilo bez 'nullable' i dalje puca
+     * na null vrednosti. Bez `nullable` ovo daje 422 na svih 5 shipping.*
+     * polja i porudžbina se nikad ne kreira — korisnik ne vidi grešku jer ti
+     * inputi/InputError su sakriveni kad je adresa izabrana (vidi CLAUDE.md
+     * "PayPal capture greška" housekeeping unos).
+     */
+    public function test_porudzbina_sa_sacuvanom_adresom_prihvata_prazne_shipping_stringove(): void
+    {
+        $user = User::factory()->create();
+        $address = $this->savedAddress($user);
+
+        $this->actingAs($user)
+            ->postJson('/orders', $this->payload([
+                'address_id' => $address->id,
+                'shipping' => [
+                    'recipient_name' => '',
+                    'phone' => '',
+                    'line1' => '',
+                    'line2' => null,
+                    'city' => '',
+                    'postal_code' => '',
+                    'country' => null,
+                ],
+            ]))
+            ->assertRedirect();
+
+        $order = Order::firstOrFail();
+        $this->assertSame('Jovan Petar Jovanović', $order->shipping_recipient_name);
+        $this->assertSame($address->id, $order->shipping_address_id);
+    }
+
     public function test_inline_adresa_bez_cuvanja(): void
     {
         $user = User::factory()->create();
