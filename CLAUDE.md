@@ -985,6 +985,64 @@ od procesora/banke, nije aplikacijski/permission problem.
   `flash.error` — obrisana posle provere, nije deo PR-a) — kontrast,
   naslov, dugme, "Razlog" blok sa pravim tekstom.
 
+## ✅ REŠENO — checkout na produkciji nije prelazio dalje (ni PayPal ni COD)
+**Kritičan produkcijski bag, otkriven i popravljen istog dana.** Svaki
+ulogovan korisnik koji je birao SAČUVANU adresu (`address_id`) na checkout-u
+dobijao je nemu grešku — dugme se "vratilo", ništa se nije desilo, ni PayPal
+ni COD. `POZNATI PROBLEMI`/testovi (380/380 pre ovog fix-a) ovo nisu uhvatili
+jer nijedan test nije slao `shipping.*` kao PRAZAN STRING uz `address_id`
+(izostavljali su ih ili slali `null`) — tačno ono što pravi frontend
+(Inertia `useForm`) uvek šalje.
+- **Uzrok:** `OrderController::store` validira `shipping.recipient_name/
+  phone/line1/city/postal_code` kao `required_without:address_id|string|
+  max:255` — BEZ `nullable`. `Checkout.vue` uvek šalje `shipping.*` kao
+  prazne stringove preko `useForm`-a, čak i kad je adresa izabrana i inline
+  polja sakrivena (`v-if="showInlineFields"`, vidi "Cart/Checkout redizajn").
+  Laravel-ov default `ConvertEmptyStringsToNull` middleware te prazne
+  stringove pretvara u `null` PRE validacije; `required_without:address_id`
+  je zadovoljen (adresa postoji, nije obavezno), ali `required_without` samo
+  znači "nije obavezno" — ne i "preskoči ostala pravila". Bez eksplicitnog
+  `nullable`, `string` pravilo se ipak izvršava nad `null` vrednošću i puca
+  sa 5 grešaka (`shipping.recipient_name`/`.phone`/`.line1`/`.city`/
+  `.postal_code`, "must be a string").
+  **Zašto niko nije video grešku:** te greške STVARNO stignu u Inertia
+  `form.errors`, ali odgovarajući `<InputError>` elementi u `Checkout.vue`
+  žive unutar `<div v-if="showInlineFields">`, koji je `false` čim je
+  adresa izabrana — blok se ne renderuje, greške ostaju nevidljive. Catch-all
+  (`form.errors.message || form.errors.items`) ne hvata `shipping.*` ključeve.
+  Bag pogađa OBA payment metoda (validacija je pre grananja `payment_method`)
+  — reprodukovano i za COD (task koji je prijavio bag) i objašnjenje se
+  primenjuje identično na PayPal.
+- **Fix:** dodat `nullable` ispred `required_without:address_id` na svih pet
+  pravila (`app/Http/Controllers/OrderController.php`). `shipping.line2` i
+  `shipping.country` već su imali `nullable` — nedirano. `nullable` ne slabi
+  `required_without` za slučaj kad je polje STVARNO izostavljeno (ne samo
+  `null`) — postojeći test `test_bez_address_id_shipping_polja_su_obavezna`
+  (bez `address_id` I bez `shipping` ključa uopšte) i dalje prolazi
+  nepromenjen, potvrđuje da regresija nije uvedena.
+- **Regresioni test** (`tests/Feature/Checkout/CheckoutAddressTest.php::
+  test_porudzbina_sa_sacuvanom_adresom_prihvata_prazne_shipping_stringove`)
+  šalje `address_id` + `shipping.*` kao doslovno prazne stringove (`''`,
+  `line2`/`country` kao `null`) — tačno pravi frontend payload. **Provereno
+  da puca PRE fix-a** (identične 5 grešaka kao na produkciji) **i prolazi
+  POSLE** — dokaz da test stvarno pokriva ovaj slučaj, ne lažno zelen.
+- Dijagnoza (pre ovog fix-a, poseban zadatak istog dana) je urađena preko
+  reprodukcije na PRODUKCIJI: privremeni test nalog preko stvarnog
+  registracionog forma + stvarna sačuvana adresa preko `/profile`, `POST
+  /orders` preko HTTP klijenta koji tačno prati Inertia-in protokol
+  (X-Inertia header, XSRF-TOKEN cookie → X-XSRF-TOKEN header, Referer),
+  SSH provera `laravel.log`-a da potvrdi da "Order created" nikad nije
+  logovano za ovaj slučaj. Test nalog obrisan preko `/profile` Delete
+  Account forme, obrisanje eksplicitno verifikovano (login sa istim
+  kredencijalima posle brisanja vraća "These credentials do not match our
+  records.").
+- Testovi: `php artisan test`: 382 passed (381 + 1 nov). Pun `CheckoutAddressTest`
+  (16 testova, uključujući novi) i pun suite prolaze.
+- **HITNO — posle merge-a u `develop` i provere na staging-u, ovaj fix ide
+  ODMAH i u `main`** (isti tok kao PR #76 jutros), ne čeka se sledeći redovni
+  ciklus — produkcija je trenutno pokvarena za SVAKI ulogovan checkout sa
+  sačuvanom adresom.
+
 ## Planirano/otvoreno
 - **UX stavka (zabeleženo, nije rešeno):** `<select>` sačuvanih adresa na
   `Checkout.vue` vizuelno izgleda identično tekstualnom input polju —

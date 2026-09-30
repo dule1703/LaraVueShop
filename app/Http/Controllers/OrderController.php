@@ -32,12 +32,18 @@ class OrderController extends Controller
             'address_id'   => 'nullable|integer',
             'save_address' => 'nullable|boolean',
             'shipping'                => 'nullable|array',
-            'shipping.recipient_name' => 'required_without:address_id|string|max:255',
-            'shipping.phone'          => 'required_without:address_id|string|max:50',
-            'shipping.line1'          => 'required_without:address_id|string|max:255',
+            // Checkout.vue UVEK šalje shipping.* preko useForm-a, čak i kad je
+            // address_id popunjen i inline polja skrivena — kao prazan string,
+            // ne izostavljeno. Laravel-ov default ConvertEmptyStringsToNull
+            // middleware to pretvara u null pre validacije; required_without
+            // samo govori "nije obavezno", ne i "preskoči ostala pravila" — bez
+            // eksplicitnog nullable, 'string' pravilo i dalje puca na null.
+            'shipping.recipient_name' => 'nullable|required_without:address_id|string|max:255',
+            'shipping.phone'          => 'nullable|required_without:address_id|string|max:50',
+            'shipping.line1'          => 'nullable|required_without:address_id|string|max:255',
             'shipping.line2'          => 'nullable|string|max:255',
-            'shipping.city'           => 'required_without:address_id|string|max:255',
-            'shipping.postal_code'    => 'required_without:address_id|string|max:20',
+            'shipping.city'           => 'nullable|required_without:address_id|string|max:255',
+            'shipping.postal_code'    => 'nullable|required_without:address_id|string|max:20',
             'shipping.country'        => 'nullable|string|max:255',
         ]);
 
