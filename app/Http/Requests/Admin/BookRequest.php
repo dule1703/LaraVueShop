@@ -43,7 +43,13 @@ class BookRequest extends FormRequest
             'price' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
             // NULL = neograničene zalihe, dozvoljeno samo za e-knjige
             'stock' => [Rule::requiredIf(fn () => $this->input('format') !== 'ebook'), 'nullable', 'integer', 'min:0'],
-            'image' => ['nullable', 'url', 'max:2048'],
+            // Rešavanje stvarne products.image vrednosti (upload/remove_image/
+            // nedirnuto) ide preko ProductImageUploader u BookController-u, ne
+            // ovde — FormRequest nema pristup postojećoj vrednosti pri edit-u
+            // bez route-model-bindovanog $book, a ovaj rules() blok se koristi
+            // i za store() gde $book ne postoji.
+            'image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_image' => ['nullable', 'boolean'],
             'is_active' => ['required', 'boolean'],
 
             // Book
@@ -87,7 +93,13 @@ class BookRequest extends FormRequest
         ];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * NE uključuje 'image' — pozivalac (BookController) ga dodaje preko
+     * ProductImageUploader::resolve(), gde jedino ima pristup postojećoj
+     * products.image vrednosti (potrebnoj za edit "ne diraj sliku" slučaj).
+     *
+     * @return array<string, mixed>
+     */
     public function productAttributes(): array
     {
         $data = $this->validated();
@@ -99,7 +111,6 @@ class BookRequest extends FormRequest
             'description' => $data['description'] ?? null,
             'price' => $data['price'],
             'stock' => $data['stock'] ?? null,
-            'image' => $data['image'] ?? null,
             'is_active' => $data['is_active'],
         ];
     }

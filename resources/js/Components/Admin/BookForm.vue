@@ -1,6 +1,12 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
+import InputLabel from '@/Components/InputLabel.vue';
+import TextInput from '@/Components/TextInput.vue';
+import InputError from '@/Components/InputError.vue';
+import Checkbox from '@/Components/Checkbox.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import BookCoverPlaceholder from '@/Components/Catalog/BookCoverPlaceholder.vue';
 
 const props = defineProps({
     options: { type: Object, required: true },
@@ -17,7 +23,8 @@ const form = useForm({
     description: props.book?.description ?? '',
     price: props.book?.price ?? '',
     stock: props.book?.stock ?? '',
-    image: props.book?.image ?? '',
+    image: null,
+    remove_image: false,
     is_active: props.book?.is_active ?? true,
     isbn: props.book?.isbn ?? '',
     publisher_id: props.book?.publisher_id ?? '',
@@ -34,187 +41,258 @@ const form = useForm({
 
 const isEbook = computed(() => form.format === 'ebook');
 
+// Trenutna slika ostaje prikazana dok admin ne izabere novu ili ne označi
+// uklanjanje — <input type="file"> se ne može unapred popuniti postojećim
+// URL-om (HTML ograničenje), pa je ovo zaseban lokalni prikaz, ne deo forme.
+const currentImageRemoved = ref(false);
+
+const onImageChange = (event) => {
+    form.image = event.target.files[0] ?? null;
+    if (form.image) {
+        form.remove_image = false;
+    }
+};
+
+watch(() => form.remove_image, (removed) => {
+    currentImageRemoved.value = removed;
+    if (removed) {
+        form.image = null;
+    }
+});
+
 const addAuthor = () => form.authors.push({ author_id: '', role: 'author' });
 const removeAuthor = (index) => form.authors.splice(index, 1);
 
 const submit = () => {
-    form[props.method](props.submitUrl);
+    form[props.method](props.submitUrl, { forceFormData: true });
 };
-
-const input = 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500';
-const label = 'block text-sm font-medium text-gray-700';
-const error = 'text-red-600 text-sm mt-1';
 </script>
 
 <template>
     <form @submit.prevent="submit" class="space-y-10">
         <section>
-            <h2 class="text-lg font-semibold mb-4">Proizvod</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <h2 class="mb-4 font-serif text-lg font-semibold text-brand-text-primary">Proizvod</h2>
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div class="md:col-span-2">
-                    <label :class="label">Naslov</label>
-                    <input v-model="form.name" type="text" required :class="input" />
-                    <div v-if="form.errors.name" :class="error">{{ form.errors.name }}</div>
+                    <InputLabel value="Naslov" />
+                    <TextInput v-model="form.name" type="text" required class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.name" />
                 </div>
 
                 <div>
-                    <label :class="label">Slug (prazno = automatski iz naslova)</label>
-                    <input v-model="form.slug" type="text" :class="input" />
-                    <div v-if="form.errors.slug" :class="error">{{ form.errors.slug }}</div>
+                    <InputLabel value="Slug (prazno = automatski iz naslova)" />
+                    <TextInput v-model="form.slug" type="text" class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.slug" />
                 </div>
 
                 <div>
-                    <label :class="label">Kategorija</label>
-                    <select v-model="form.category_id" required :class="input">
+                    <InputLabel value="Kategorija" />
+                    <select
+                        v-model="form.category_id"
+                        required
+                        class="mt-1 block w-full rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
+                    >
                         <option value="">Izaberi kategoriju</option>
                         <option v-for="category in options.categories" :key="category.id" :value="category.id">
                             {{ category.name }}
                         </option>
                     </select>
-                    <div v-if="form.errors.category_id" :class="error">{{ form.errors.category_id }}</div>
+                    <InputError class="mt-2" :message="form.errors.category_id" />
                 </div>
 
                 <div class="md:col-span-2">
-                    <label :class="label">Opis</label>
-                    <textarea v-model="form.description" rows="4" :class="input"></textarea>
-                    <div v-if="form.errors.description" :class="error">{{ form.errors.description }}</div>
+                    <InputLabel value="Opis" />
+                    <textarea
+                        v-model="form.description"
+                        rows="4"
+                        class="mt-1 block w-full rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
+                    ></textarea>
+                    <InputError class="mt-2" :message="form.errors.description" />
                 </div>
 
                 <div>
-                    <label :class="label">Cena (€)</label>
-                    <input v-model="form.price" type="number" step="0.01" min="0" required :class="input" />
-                    <div v-if="form.errors.price" :class="error">{{ form.errors.price }}</div>
+                    <InputLabel value="Cena (€)" />
+                    <TextInput v-model="form.price" type="number" step="0.01" min="0" required class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.price" />
                 </div>
 
                 <div>
-                    <label :class="label">
+                    <InputLabel>
                         Zaliha<span v-if="isEbook"> (prazno = neograničeno)</span>
-                    </label>
-                    <input v-model="form.stock" type="number" min="0" :required="!isEbook" :class="input" />
-                    <div v-if="form.errors.stock" :class="error">{{ form.errors.stock }}</div>
+                    </InputLabel>
+                    <TextInput v-model="form.stock" type="number" min="0" :required="!isEbook" class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.stock" />
                 </div>
 
                 <div class="md:col-span-2">
-                    <label :class="label">URL slike</label>
-                    <input v-model="form.image" type="url" placeholder="https://..." :class="input" />
-                    <div v-if="form.errors.image" :class="error">{{ form.errors.image }}</div>
+                    <InputLabel value="Slika" />
+
+                    <div
+                        v-if="book?.image && !currentImageRemoved"
+                        class="mt-2 h-32 w-32 overflow-hidden rounded-lg border border-black/10"
+                    >
+                        <BookCoverPlaceholder :title="book.name" :image="book.image" />
+                    </div>
+
+                    <label v-if="book?.image" class="mt-2 flex items-center gap-2">
+                        <Checkbox v-model:checked="form.remove_image" />
+                        <span class="text-sm text-brand-text-primary">Ukloni trenutnu sliku</span>
+                    </label>
+
+                    <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        class="mt-2 block w-full text-sm text-brand-text-secondary file:mr-4 file:rounded-md file:border-0 file:bg-brand-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-accent-hover"
+                        @change="onImageChange"
+                    />
+                    <p class="mt-1 text-xs text-brand-text-secondary">
+                        JPG, PNG ili WebP, do 2 MB. Ostavi prazno {{ book ? 'da zadržiš postojeću sliku' : 'za placeholder koricu' }}.
+                    </p>
+                    <InputError class="mt-2" :message="form.errors.image" />
                 </div>
 
-                <div class="flex items-center">
-                    <input v-model="form.is_active" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
-                    <label class="ml-2 block text-sm text-gray-900">Aktivna knjiga</label>
-                </div>
+                <label class="flex items-center gap-2">
+                    <Checkbox v-model:checked="form.is_active" />
+                    <span class="text-sm text-brand-text-primary">Aktivna knjiga</span>
+                </label>
             </div>
         </section>
 
         <section>
-            <h2 class="text-lg font-semibold mb-4">Bibliografski podaci</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <h2 class="mb-4 font-serif text-lg font-semibold text-brand-text-primary">Bibliografski podaci</h2>
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
-                    <label :class="label">ISBN (ISBN-10 ili ISBN-13, crtice su dozvoljene)</label>
-                    <input v-model="form.isbn" type="text" :class="input" />
-                    <div v-if="form.errors.isbn" :class="error">{{ form.errors.isbn }}</div>
+                    <InputLabel value="ISBN (ISBN-10 ili ISBN-13, crtice su dozvoljene)" />
+                    <TextInput v-model="form.isbn" type="text" class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.isbn" />
                 </div>
 
                 <div>
-                    <label :class="label">Izdavač</label>
-                    <select v-model="form.publisher_id" :class="input">
+                    <InputLabel value="Izdavač" />
+                    <select
+                        v-model="form.publisher_id"
+                        class="mt-1 block w-full rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
+                    >
                         <option value="">Bez izdavača</option>
                         <option v-for="publisher in options.publishers" :key="publisher.id" :value="publisher.id">
                             {{ publisher.name }}
                         </option>
                     </select>
-                    <div v-if="form.errors.publisher_id" :class="error">{{ form.errors.publisher_id }}</div>
+                    <InputError class="mt-2" :message="form.errors.publisher_id" />
                 </div>
 
                 <div>
-                    <label :class="label">Podnaslov</label>
-                    <input v-model="form.subtitle" type="text" :class="input" />
-                    <div v-if="form.errors.subtitle" :class="error">{{ form.errors.subtitle }}</div>
+                    <InputLabel value="Podnaslov" />
+                    <TextInput v-model="form.subtitle" type="text" class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.subtitle" />
                 </div>
 
                 <div>
-                    <label :class="label">Originalni naslov</label>
-                    <input v-model="form.original_title" type="text" :class="input" />
-                    <div v-if="form.errors.original_title" :class="error">{{ form.errors.original_title }}</div>
+                    <InputLabel value="Originalni naslov" />
+                    <TextInput v-model="form.original_title" type="text" class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.original_title" />
                 </div>
 
                 <div>
-                    <label :class="label">Godina izdanja</label>
-                    <input v-model="form.published_year" type="number" :class="input" />
-                    <div v-if="form.errors.published_year" :class="error">{{ form.errors.published_year }}</div>
+                    <InputLabel value="Godina izdanja" />
+                    <TextInput v-model="form.published_year" type="number" class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.published_year" />
                 </div>
 
                 <div>
-                    <label :class="label">Broj strana</label>
-                    <input v-model="form.pages" type="number" min="1" :class="input" />
-                    <div v-if="form.errors.pages" :class="error">{{ form.errors.pages }}</div>
+                    <InputLabel value="Broj strana" />
+                    <TextInput v-model="form.pages" type="number" min="1" class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.pages" />
                 </div>
 
                 <div>
-                    <label :class="label">Jezik (ISO kod, npr. sr, en)</label>
-                    <input v-model="form.language" type="text" required maxlength="3" :class="input" />
-                    <div v-if="form.errors.language" :class="error">{{ form.errors.language }}</div>
+                    <InputLabel value="Jezik (ISO kod, npr. sr, en)" />
+                    <TextInput v-model="form.language" type="text" required maxlength="3" class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.language" />
                 </div>
 
                 <div>
-                    <label :class="label">Pismo</label>
-                    <select v-model="form.script" :class="input">
+                    <InputLabel value="Pismo" />
+                    <select
+                        v-model="form.script"
+                        class="mt-1 block w-full rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
+                    >
                         <option value="">Nije navedeno</option>
                         <option v-for="script in options.scripts" :key="script" :value="script">
                             {{ script === 'Cyrl' ? 'Ćirilica' : 'Latinica' }}
                         </option>
                     </select>
-                    <div v-if="form.errors.script" :class="error">{{ form.errors.script }}</div>
+                    <InputError class="mt-2" :message="form.errors.script" />
                 </div>
 
                 <div>
-                    <label :class="label">Format</label>
-                    <select v-model="form.format" required :class="input">
+                    <InputLabel value="Format" />
+                    <select
+                        v-model="form.format"
+                        required
+                        class="mt-1 block w-full rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
+                    >
                         <option v-for="format in options.formats" :key="format" :value="format">{{ format }}</option>
                     </select>
-                    <div v-if="form.errors.format" :class="error">{{ form.errors.format }}</div>
+                    <InputError class="mt-2" :message="form.errors.format" />
                 </div>
 
                 <div>
-                    <label :class="label">Težina (g)</label>
-                    <input v-model="form.weight_g" type="number" min="1" :class="input" />
-                    <div v-if="form.errors.weight_g" :class="error">{{ form.errors.weight_g }}</div>
+                    <InputLabel value="Težina (g)" />
+                    <TextInput v-model="form.weight_g" type="number" min="1" class="mt-1 block w-full" />
+                    <InputError class="mt-2" :message="form.errors.weight_g" />
                 </div>
             </div>
         </section>
 
         <section>
-            <h2 class="text-lg font-semibold mb-4">Autori i saradnici</h2>
+            <h2 class="mb-4 font-serif text-lg font-semibold text-brand-text-primary">Autori i saradnici</h2>
             <div v-for="(row, index) in form.authors" :key="index" class="mb-3 flex flex-wrap items-start gap-3">
                 <div>
-                    <select v-model="row.author_id" required :class="input">
+                    <select
+                        v-model="row.author_id"
+                        required
+                        class="rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
+                    >
                         <option value="">Izaberi autora</option>
                         <option v-for="author in options.authors" :key="author.id" :value="author.id">{{ author.name }}</option>
                     </select>
-                    <div v-if="form.errors[`authors.${index}.author_id`]" :class="error">{{ form.errors[`authors.${index}.author_id`] }}</div>
+                    <div v-if="form.errors[`authors.${index}.author_id`]" class="mt-1 text-sm text-red-600">{{ form.errors[`authors.${index}.author_id`] }}</div>
                 </div>
                 <div>
-                    <select v-model="row.role" required :class="input">
+                    <select
+                        v-model="row.role"
+                        required
+                        class="rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
+                    >
                         <option v-for="role in options.roles" :key="role" :value="role">{{ role }}</option>
                     </select>
-                    <div v-if="form.errors[`authors.${index}.role`]" :class="error">{{ form.errors[`authors.${index}.role`] }}</div>
+                    <div v-if="form.errors[`authors.${index}.role`]" class="mt-1 text-sm text-red-600">{{ form.errors[`authors.${index}.role`] }}</div>
                 </div>
-                <button type="button" @click="removeAuthor(index)" class="mt-1 px-3 py-2 text-sm text-red-600 hover:text-red-900">Ukloni</button>
+                <button type="button" @click="removeAuthor(index)" class="mt-1 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700">
+                    Ukloni
+                </button>
             </div>
-            <div v-if="form.errors.authors" :class="error">{{ form.errors.authors }}</div>
-            <button type="button" @click="addAuthor" class="px-3 py-2 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+            <div v-if="form.errors.authors" class="mb-2 text-sm text-red-600">{{ form.errors.authors }}</div>
+            <button
+                type="button"
+                @click="addAuthor"
+                class="inline-flex items-center rounded-md border border-black/20 bg-white px-3 py-2 text-sm font-medium text-brand-text-primary shadow-sm transition duration-150 ease-in-out hover:bg-brand-card"
+            >
                 Dodaj autora
             </button>
         </section>
 
         <div class="flex justify-end gap-4">
-            <Link :href="route('admin.books.index')" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+            <Link
+                :href="route('admin.books.index')"
+                class="inline-flex items-center rounded-md border border-black/20 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-brand-text-primary shadow-sm transition duration-150 ease-in-out hover:bg-brand-card"
+            >
                 Otkaži
             </Link>
-            <button type="submit" :disabled="form.processing" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50">
+            <PrimaryButton :disabled="form.processing">
                 {{ submitLabel }}
-            </button>
+            </PrimaryButton>
         </div>
     </form>
 </template>

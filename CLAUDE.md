@@ -1124,9 +1124,151 @@ uspostavljene NA Categories, za ponovnu upotrebu u sledeća 3 koraka:
   kontrast, font-serif naslovi, status bedževi, amber isticanje niske
   zalihe.
 
+## Dizajn — Admin panel, korak 2: Products + Books + slike korica (Deo 0-4)
+
+### Deo 0 — Izvodljivost automatskog uvoza korica sa Open Library — REZULTAT: ~6%, ODLUČENO DA SE NE GRADI
+Testirano na SVIH 33 knjiga sa `isbn13` u bazi (manje od predloženih 30-50,
+ali to je cela populacija kandidata). Signal za "nema korice" utvrđen
+empirijski (Open Library nema 404 za nepostojeću koricu — vraća 302 redirect
+ka archive.org): **1×1 GIF, tačno 43 bajta**, identičan hash na 4 nezavisna
+lažna ISBN-a; prava korica je uvek JPEG od nekoliko desetina KB. `Content-
+Length` header je nepouzdan (uvek `0` zbog redirect-a) — mora se meriti
+veličina fajla NAKON što se isprati redirekcija (`curl -L`).
+**Rezultat: 2/33 (~6%)** — pogodak samo za "Seobe" (Crnjanski) i "Tesla,
+portret među maskama" (Pištalo), oba vizuelno potvrđena kao ispravne korice.
+Ostalih 31 (Andrić, Kiš, Pekić, Selimović, Pavić...) — promašaj, očekivano za
+domaće autore na anglo-centričnom katalogu.
+**Odluka korisnika** (pitanje postavljeno eksplicitno posle ovog rezultata,
+ispod 15-20% praga iz zadatka): **NE graditi Deo 1** (`catalog:fetch-covers`
+automatizacija) — fokus samo na Deo 2 (ručni upload). Ako katalog kasnije
+poraste ka 300-500 knjiga i i dalje treba ovo, ~6% stopa i metodologija
+(43-bajtni GIF signal) ostaju ovde zapisani za ponovnu procenu, ne treba
+ponovo empirijski istraživati od nule.
+
+### Deo 1 — PRESKOČEN (odluka korisnika, vidi Deo 0)
+
+### Deo 2 — Ručni upload slike (fallback, sad i jedini put)
+`app/Support/ProductImageUploader.php` (nov, deljen između `ProductController`
+i `BookController` preko `BookRequest` — obe admin sekcije pišu u istu
+`products.image` kolonu, isti `'public'` disk). `resolve(Request $request,
+?string $currentImage): ?string` — tri ishoda:
+1. Nov fajl otpremljen (`image`) → sačuvaj (`Storage::disk('public')->
+   store('products', ...)`), obriši stari LOKALNI fajl ako je postojao.
+2. `remove_image` checkbox → obriši trenutnu (lokalnu) sliku, postavi `NULL`.
+3. Ni jedno ni drugo → vrati POSTOJEĆU vrednost nedirnutu — bitno za Edit
+   forme: `<input type="file">` se ne može unapred popuniti postojećim
+   URL-om (HTML ograničenje), pa "ništa nije izabrano" mora značiti "ne
+   diraj sliku", ne "obriši je".
+- **"Lokalna" detekcija za brisanje** — poredi prefiks URL-a sa
+  `Storage::disk('public')->url('')`, NE `config('app.url') . '/storage/'`
+  (ručna konkatenacija). Eksterni URL (npr. postojeći `picsum.photos` unos)
+  se nikad ne pokušava obrisati — nije na našem disku.
+  **Gotcha otkriven pri pisanju testa:** `Storage::fake('public')` u
+  testovima GUBI eksplicitan `'url'` config (vidi
+  `Storage::buildDiskConfiguration()` u frameworku — ne prenosi 'url' iz
+  originalnog config-a) i vraća RELATIVNU putanju (`/storage/...`) umesto
+  pune (`http://.../storage/...`). Ručna `config('app.url')` konkatenacija
+  bi tiho promašila poređenje u testovima (fajl bi "izgledao eksterno" i
+  nikad se ne bi obrisao) iako u produkciji radi — otkriveno kroz 2 padajuća
+  testa, popravljeno korišćenjem `Storage::disk('public')->url('')` kao
+  izvora istine umesto pretpostavke o formatu.
+- Validacija (i `ProductController` i `BookRequest`): `nullable|file|
+  mimes:jpg,jpeg,png,webp|max:2048` + `remove_image => nullable|boolean`.
+  `products.image` je već bio `nullable` u šemi (Faza 1) — bez migracije.
+- **Frontend:** `Admin/Products/Create.vue`/`Edit.vue` i deljeni
+  `Admin/BookForm.vue` (koristi ga i `Admin/Books/Create.vue`/`Edit.vue`) —
+  `<input type="file">` stilizovan preko Tailwind `file:*` varijanti
+  (`file:bg-brand-accent` dugme). Edit forme dodatno prikazuju trenutnu
+  sliku (`BookCoverPlaceholder` preview, 128×128) + "Ukloni trenutnu sliku"
+  checkbox (samo kad `product.image`/`book.image` postoji). Inertia
+  `useForm().put(url, { forceFormData: true })` — File u payload-u
+  automatski prebacuje zahtev na multipart + `_method` spoofing (Inertia-ino
+  ugrađeno ponašanje, ne ručna logika).
+  **`BookRequest::productAttributes()` namerno NE uključuje `'image'`** —
+  FormRequest nema pristup postojećoj `products.image` vrednosti bez
+  route-bound `$book` (koji ne postoji na `store()`), pa `BookController`
+  eksplicitno dodaje `ProductImageUploader::resolve($request, $book?->
+  product?->image)` u rezultat pre poziva `BookService`.
+- **Testovi popravljeni (regresija otkrivena pri pisanju):** `bookPayload()`
+  (`tests/Concerns/BuildsBookPayload.php`) i dva mesta u
+  `AdminAccessTest.php` su slali `'image' => 'https://example.com/...'`
+  (URL string) — validno pod STARIM `url` pravilom, nevalidno pod novim
+  `file` pravilom. Uklonjeno iz payload-a (nullable, izostavljanje je
+  ispravno); jedna asercija u `BookCrudTest.php` promenjena sa "image je
+  sačuvan URL" na "image je NULL" (payload ga više ne šalje).
+  `database/factories/ProductFactory.php`'s `'image' => 'https://
+  picsum.photos/...'` NIJE dirano — factory piše direktno u DB preko
+  Eloquent-a, ne prolazi kroz HTTP validaciju, pa i dalje ispravno seed-uje
+  postojeće demo proizvode sa URL slikama.
+- Nov `tests/Feature/Admin/ProductImageUploadTest.php` (9 testova — upload
+  uspešan/kreira storage fajl, odbija pogrešan mime, odbija fajl preko
+  2048 KB, edit bez nove slike ne menja postojeću, `remove_image` briše i
+  fajl i vrednost, zamena briše staru LOKALNU sliku, zamena NE dira eksterni
+  URL, isto za Book put preko `BookRequest`). `UploadedFile::fake()->
+  create(...)` namerno, NE `->image()` — potonji zahteva GD/Imagick
+  ekstenziju, potvrđeno odsutnu u ovom okruženju (`php -m | grep -i gd`
+  prazno) PRE pisanja testa.
+
+### Deo 3 — BookCoverPlaceholder.vue robusnost
+`<img>` dobija `@error` handler → `imageFailed` ref → pada nazad na
+tipografski placeholder (isti kao da `image` prop nikad nije ni postojao).
+`watch(() => props.image, ...)` resetuje zastavicu kad se prop promeni
+(sprečava da ostane trajno "failed" iz prethodnog URL-a na istoj mount-ovanoj
+instanci, npr. u tabeli gde redovi mogu da se re-renderuju). Ponovo
+iskorišćeno kao thumbnail u `Admin/Products/Index.vue` i
+`Admin/Books/Index.vue` (Deo 4) — null `image` prop tamo je sad čest slučaj
+otkad URL više nije obavezan, pa ovaj fallback nije samo teoretski.
+Test: `BookCoverPlaceholder.test.js` (nov — trigger `error` event na `<img>`,
+potvrdi pad na placeholder sa naslovom/autorom).
+
+### Deo 4 — Products + Books CRUD redizajn
+Ponovo korišćen obrazac iz koraka 1 (`AdminPageHeader`/`AdminTable`/
+`StatusBadge`, `DeleteConfirmation` nedirana ovde) — nijedna nova
+tabela/header komponenta.
+- `Admin/Products/Index.vue` — thumbnail kolona (`BookCoverPlaceholder`,
+  48×48) sad ima smisla otkad slike stvarno postoje/mogu nedostajati
+  elegantno. `formatPrice()` iz `lib/bookLabels.js` (isti razlog kao
+  katalog — broj sa SQLite-a, string sa MariaDB-a).
+- `Admin/Books/Index.vue` — isti pattern + thumbnail, zadržan nisko-zaliha
+  filter dugme i `RestockForm` (Faza 5) u koloni akcija, nedirano
+  funkcionalno.
+- `Admin/Components/RestockForm.vue` — sitna vizuelna uskladba (brand-*
+  border/focus/tekst boje), `emerald-600` trigger/submit dugme namerno
+  ZADRŽANO (semantička razlika od `brand-accent` — "dopuni zalihu" je
+  distinktna pozitivna akcija, ne generička primarna akcija).
+- Flash poruke u `ProductController` prevedene na srpski ("Proizvod je
+  uspešno dodat/izmenjen/obrisan.") — `BookController`/`CategoryController`
+  su već bili na srpskom od ranijih koraka.
+- **Poznato, NEDIRANO (pre-postojeće, van opsega ovog koraka):** primećeno
+  pri vizuelnoj proveri da `Admin/Products/Edit.vue`'s "Kategorija" select
+  prikazuje prazno kad proizvod pripada DEAKTIVIRANOJ kategoriji (npr.
+  legacy `Electronics` posle `catalog:cleanup-legacy-categories`, Faza 3
+  deo 3) — `ProductController::edit()`/`create()` filtriraju `categories`
+  prop na `is_active=true`, pa `form.category_id` ne poklapa nijednu
+  `<option>`. Pre-postojeće ponašanje (isti filter je bio prisutan i pre
+  ovog koraka), nedirano — nije u opsegu "Products/Books CRUD redizajn".
+- Testovi: puna `tests/Feature/Admin/` (154, uključujući `AdminAccessTest`
+  markup-neosetljive provere) i pun suite (**393 passed**, 384 + 9 novih iz
+  Dela 2) prolaze. `npm run test`: 53 passed (52 + 1 novi iz Dela 3).
+  `npx vite build` prolazi. Vizuelno provereno (headless Chrome screenshot
+  preko privremenih, necommit-ovanih preview ruta sa pravim podacima iz dev
+  baze — obrisane posle provere): Products/Books Index sa thumbnail-ovima i
+  bedževima, Create/Edit forme sa file upload-om i "ukloni sliku" tokom
+  (uključujući stvaran network round-trip do `picsum.photos` za postojeću
+  demo sliku — potvrđeno da prikaz radi, prvi screenshot je uhvatio
+  mid-load stanje pre nego što je slika stigla, drugi sa dužim
+  `--virtual-time-budget` je potvrdio ispravan prikaz).
+
 ## Planirano/otvoreno
 - **UX stavka (zabeleženo, nije rešeno):** `<select>` sačuvanih adresa na
   `Checkout.vue` vizuelno izgleda identično tekstualnom input polju —
   korisnik ne prepoznaje da je dropdown. Razmotriti vizuelni indikator
   (strelica/drugačiji stil) ili prikaz telefona/poštanskog broja ispod
   izabrane adrese radi potvrde pre slanja porudžbine.
+- **Sitan UX bag (zabeleženo, nije rešeno):** `Admin/Products/Edit.vue`
+  "Kategorija" select prikazuje prazno za proizvode iz deaktivirane
+  kategorije (vidi "Admin panel korak 2, Deo 4" gore) — select bi trebalo
+  da uključi i trenutnu kategoriju proizvoda čak i ako je deaktivirana
+  (npr. dodatna `<option>` van `v-for` liste kad `product.category_id` nije
+  među aktivnim), ili da jasno prikaže "Kategorija je deaktivirana:
+  {ime}" umesto praznog select-a.

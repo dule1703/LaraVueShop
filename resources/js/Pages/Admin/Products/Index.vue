@@ -1,8 +1,12 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import DeleteConfirmation from '@/Components/DeleteConfirmation.vue';
+import AdminPageHeader from '@/Components/Admin/AdminPageHeader.vue';
+import AdminTable from '@/Components/Admin/AdminTable.vue';
+import StatusBadge from '@/Components/Admin/StatusBadge.vue';
+import BookCoverPlaceholder from '@/Components/Catalog/BookCoverPlaceholder.vue';
+import { formatPrice } from '@/lib/bookLabels';
 
 const page = usePage();
 
@@ -12,72 +16,62 @@ defineProps({
 </script>
 
 <template>
-    <Head title="Products" />
+    <Head title="Proizvodi" />
 
     <AuthenticatedLayout>
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 bg-white border-b border-gray-200">
-                        <!-- Flash poruka -->
-                        <div v-if="page.props.flash?.success" class="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
-                            {{ page.props.flash.success }}
-                        </div>
-
-                        <h1 class="text-2xl font-bold mb-6">Products</h1>
-
-                        <Link :href="route('admin.products.create')" class="mb-4 inline-block px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
-                            Add New Product
-                        </Link>
-
-                        <div class="mt-6 overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Image</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="product in products" :key="product.id">
-                                        <td class="px-6 py-4">
-                                            <img :src="product.image" alt="product.image" class="h-16 w-16 object-cover rounded">
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ product.name }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ product.category.name }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ product.price }} €</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ product.stock }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <span :class="product.is_active ? 'text-green-600' : 'text-red-600'">
-                                                {{ product.is_active ? 'Active' : 'Inactive' }}
-                                            </span>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <Link :href="route('admin.products.edit', product.id)" class="text-indigo-600 hover:text-indigo-900 mr-4">
-                                                Edit
-                                            </Link>
-
-                                            <DeleteConfirmation
-                                                :item-name="product.name"
-                                                item-type="product"
-                                                :delete-url="route('admin.products.destroy', product.id)"
-                                            />
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-
-                            <p v-if="products.length === 0" class="text-center py-8 text-gray-500">
-                                There are no products yet. Add the first one!
-                            </p>
-                        </div>
-                    </div>
+        <div class="min-h-screen bg-brand-page py-8 md:py-12">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div
+                    v-if="page.props.flash?.success"
+                    class="mb-6 rounded-xl border border-brand-accent bg-brand-card p-4 text-brand-text-primary"
+                >
+                    {{ page.props.flash.success }}
                 </div>
+
+                <AdminPageHeader title="Proizvodi">
+                    <template #actions>
+                        <Link
+                            :href="route('admin.products.create')"
+                            class="inline-flex items-center rounded-lg bg-brand-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-accent-hover"
+                        >
+                            + Dodaj proizvod
+                        </Link>
+                    </template>
+                </AdminPageHeader>
+
+                <AdminTable
+                    :headers="['Slika', 'Naziv', 'Kategorija', 'Cena', 'Zaliha', 'Status', 'Akcije']"
+                    :is-empty="products.length === 0"
+                    empty-message="Još nema proizvoda. Dodajte prvi!"
+                >
+                    <tr v-for="product in products" :key="product.id">
+                        <td class="px-6 py-4">
+                            <div class="h-12 w-12 overflow-hidden rounded-lg border border-black/10">
+                                <BookCoverPlaceholder :title="product.name" :image="product.image" />
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 text-sm font-medium text-brand-text-primary">{{ product.name }}</td>
+                        <td class="px-6 py-4 text-sm text-brand-text-secondary">{{ product.category.name }}</td>
+                        <td class="px-6 py-4 text-sm text-brand-text-primary">{{ formatPrice(product.price) }}</td>
+                        <td class="px-6 py-4 text-sm text-brand-text-primary">{{ product.stock }}</td>
+                        <td class="px-6 py-4">
+                            <StatusBadge :active="product.is_active" />
+                        </td>
+                        <td class="px-6 py-4 text-sm font-medium">
+                            <Link
+                                :href="route('admin.products.edit', product.id)"
+                                class="mr-4 font-medium text-brand-accent hover:text-brand-accent-hover"
+                            >
+                                Izmeni
+                            </Link>
+                            <DeleteConfirmation
+                                :item-name="product.name"
+                                item-type="product"
+                                :delete-url="route('admin.products.destroy', product.id)"
+                            />
+                        </td>
+                    </tr>
+                </AdminTable>
             </div>
         </div>
     </AuthenticatedLayout>

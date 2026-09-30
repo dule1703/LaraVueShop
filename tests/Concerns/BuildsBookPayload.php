@@ -15,6 +15,8 @@ trait BuildsBookPayload
 
     /**
      * Ispravan zahtev za admin formu knjige; prepiši samo ono što test menja.
+     * Namerno bez 'image' — otkad je to upload polje (ne URL string), testovi
+     * kojima treba slika je dodaju eksplicitno preko UploadedFile::fake().
      *
      * @param  array<string, mixed>  $overrides
      * @return array<string, mixed>
@@ -28,7 +30,6 @@ trait BuildsBookPayload
             'description' => 'Roman Ive Andrića.',
             'price' => 12.5,
             'stock' => 7,
-            'image' => 'https://example.com/avlija.jpg',
             'is_active' => true,
             'isbn' => '978-0-306-40615-7',
             'publisher_id' => (Publisher::query()->first() ?? Publisher::factory()->create())->id,

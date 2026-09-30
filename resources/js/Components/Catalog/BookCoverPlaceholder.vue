@@ -1,11 +1,21 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     title: { type: String, required: true },
     author: { type: String, default: '' },
     image: { type: String, default: null },
 });
+
+// Slomljen/nedostupan URL (spoljni link koji je u međuvremenu pao, ili
+// budući edge slučaj) treba da padne nazad na tipografski placeholder umesto
+// slomljene ikonice u browseru — @error na <img> ispod. `watch` resetuje
+// zastavicu kad se `image` prop promeni (npr. isti mount-ovan wrapper
+// prikazuje drugu knjigu), inače bi ostala trajno "failed" iz prošlog URL-a.
+const imageFailed = ref(false);
+watch(() => props.image, () => { imageFailed.value = false; });
+
+const showImage = computed(() => Boolean(props.image) && !imageFailed.value);
 
 // Topla, "vintage korica" paleta — deterministički izabrana iz naslova, tako
 // da ista knjiga uvek dobija istu boju, a susedne kartice u gridu variraju.
@@ -33,11 +43,12 @@ const backgroundColor = computed(() => PALETTE[hashString(props.title) % PALETTE
 <template>
     <div class="relative h-full w-full overflow-hidden">
         <img
-            v-if="image"
+            v-if="showImage"
             :src="image"
             :alt="title"
             loading="lazy"
             class="h-full w-full object-cover"
+            @error="imageFailed = true"
         />
         <div
             v-else

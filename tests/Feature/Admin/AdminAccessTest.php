@@ -149,7 +149,6 @@ class AdminAccessTest extends TestCase
             'description' => 'Roman Ive Andrića.',
             'price' => 15.50,
             'stock' => 10,
-            'image' => 'https://example.com/drina.jpg',
             'is_active' => true,
         ]);
 
@@ -165,7 +164,6 @@ class AdminAccessTest extends TestCase
             'description' => null,
             'price' => 12.00,
             'stock' => 3,
-            'image' => 'https://example.com/avlija.jpg',
             'is_active' => true,
         ]);
 
