@@ -1,10 +1,15 @@
 <script setup>
 import { Link, useForm } from '@inertiajs/vue3';
+import InputLabel from '@/Components/InputLabel.vue';
+import TextInput from '@/Components/TextInput.vue';
+import InputError from '@/Components/InputError.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
 
 const props = defineProps({
     publisher: { type: Object, default: null },
     submitUrl: { type: String, required: true },
     method: { type: String, default: 'post' },
+    submitLabel: { type: String, default: 'Sačuvaj izdavača' },
 });
 
 const form = useForm({
@@ -16,37 +21,38 @@ const form = useForm({
 const submit = () => {
     form[props.method](props.submitUrl);
 };
-
-const input = 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500';
 </script>
 
 <template>
-    <form @submit.prevent="submit" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <form @submit.prevent="submit" class="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div>
-            <label class="block text-sm font-medium text-gray-700">Naziv</label>
-            <input v-model="form.name" type="text" required :class="input" />
-            <div v-if="form.errors.name" class="text-red-600 text-sm mt-1">{{ form.errors.name }}</div>
+            <InputLabel value="Naziv" />
+            <TextInput v-model="form.name" type="text" required class="mt-1 block w-full" />
+            <InputError class="mt-2" :message="form.errors.name" />
         </div>
 
         <div>
-            <label class="block text-sm font-medium text-gray-700">Slug (prazno = automatski iz naziva)</label>
-            <input v-model="form.slug" type="text" :class="input" />
-            <div v-if="form.errors.slug" class="text-red-600 text-sm mt-1">{{ form.errors.slug }}</div>
+            <InputLabel value="Slug (prazno = automatski iz naziva)" />
+            <TextInput v-model="form.slug" type="text" class="mt-1 block w-full" />
+            <InputError class="mt-2" :message="form.errors.slug" />
         </div>
 
         <div class="md:col-span-2">
-            <label class="block text-sm font-medium text-gray-700">Veb sajt</label>
-            <input v-model="form.website" type="url" placeholder="https://..." :class="input" />
-            <div v-if="form.errors.website" class="text-red-600 text-sm mt-1">{{ form.errors.website }}</div>
+            <InputLabel value="Veb sajt" />
+            <TextInput v-model="form.website" type="url" placeholder="https://..." class="mt-1 block w-full" />
+            <InputError class="mt-2" :message="form.errors.website" />
         </div>
 
         <div class="md:col-span-2 flex justify-end gap-4">
-            <Link :href="route('admin.publishers.index')" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+            <Link
+                :href="route('admin.publishers.index')"
+                class="inline-flex items-center rounded-md border border-black/20 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-brand-text-primary shadow-sm transition duration-150 ease-in-out hover:bg-brand-card"
+            >
                 Otkaži
             </Link>
-            <button type="submit" :disabled="form.processing" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50">
-                Sačuvaj
-            </button>
+            <PrimaryButton :disabled="form.processing">
+                {{ submitLabel }}
+            </PrimaryButton>
         </div>
     </form>
 </template>
