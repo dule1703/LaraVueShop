@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Order;
+use App\Models\Product;
 use App\Http\Controllers\AddressController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\ProfileController;
@@ -23,8 +24,21 @@ Route::get('/', [CatalogController::class, 'index'])->name('home');
 Route::get('/shop', [CatalogController::class, 'index'])->name('shop');
 Route::get('/knjiga/{slug}', [CatalogController::class, 'show'])->name('book.show');
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
+Route::get('/dashboard', function (Request $request) {
+    $stats = null;
+
+    if ($request->user()->role === 'admin') {
+        // Read-only brojevi za admin početnu — isti low-stock prag (5) kao
+        // BookController::DEFAULT_LOW_STOCK_THRESHOLD (Faza 5).
+        $stats = [
+            'total_orders' => Order::count(),
+            'pending_orders' => Order::where('status', 'pending')->count(),
+            'total_products' => Product::count(),
+            'low_stock_products' => Product::whereNotNull('stock')->where('stock', '<', 5)->count(),
+        ];
+    }
+
+    return Inertia::render('Dashboard', ['stats' => $stats]);
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
