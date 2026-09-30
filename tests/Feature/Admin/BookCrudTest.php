@@ -56,7 +56,7 @@ class BookCrudTest extends TestCase
         $this->assertEquals(12.5, $product->price);
         $this->assertSame(7, $product->stock);
         $this->assertTrue($product->is_active);
-        $this->assertSame('https://example.com/avlija.jpg', $product->image);
+        $this->assertNull($product->image); // bookPayload() ne šalje sliku (nije obavezno)
 
         $book = $product->book;
         $this->assertNotNull($book);

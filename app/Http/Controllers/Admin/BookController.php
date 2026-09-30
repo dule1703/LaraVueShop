@@ -11,6 +11,7 @@ use App\Models\OrderItem;
 use App\Models\Publisher;
 use App\Services\BookService;
 use App\Services\InventoryService;
+use App\Support\ProductImageUploader;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -73,7 +74,10 @@ class BookController extends Controller
 
     public function store(BookRequest $request): RedirectResponse
     {
-        $this->books->create($request->productAttributes(), $request->bookAttributes(), $request->authorRows());
+        $product = $request->productAttributes();
+        $product['image'] = ProductImageUploader::resolve($request, null);
+
+        $this->books->create($product, $request->bookAttributes(), $request->authorRows());
 
         return redirect()->route('admin.books.index')->with('success', 'Knjiga je uspešno dodata.');
     }
@@ -113,7 +117,10 @@ class BookController extends Controller
 
     public function update(BookRequest $request, Book $book): RedirectResponse
     {
-        $this->books->update($book, $request->productAttributes(), $request->bookAttributes(), $request->authorRows());
+        $product = $request->productAttributes();
+        $product['image'] = ProductImageUploader::resolve($request, $book->product->image);
+
+        $this->books->update($book, $product, $request->bookAttributes(), $request->authorRows());
 
         return redirect()->route('admin.books.index')->with('success', 'Knjiga je uspešno izmenjena.');
     }

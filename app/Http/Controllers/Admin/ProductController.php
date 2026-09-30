@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
+use App\Support\ProductImageUploader;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
@@ -45,7 +46,7 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
-            'image' => 'required|url',
+            'image' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
             'is_active' => 'boolean'
         ]);
 
@@ -56,10 +57,10 @@ class ProductController extends Controller
             'description' => $validated['description'],
             'price' => $validated['price'],
             'stock' => $validated['stock'],
-            'image' => $validated['image'],
-            'is_active' => $request->boolean('is_active', true),           
+            'image' => ProductImageUploader::resolve($request, null),
+            'is_active' => $request->boolean('is_active', true),
         ]);
-        return Redirect::route('admin.products.index')->with('success', 'Product is successfully created!');
+        return Redirect::route('admin.products.index')->with('success', 'Proizvod je uspešno dodat.');
     }
 
     /**
@@ -95,7 +96,8 @@ public function update(Request $request, Product $product)
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
-            'image' => 'required|url',
+            'image' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
+            'remove_image' => 'nullable|boolean',
             'is_active' => 'boolean'
         ]);
 
@@ -106,11 +108,11 @@ public function update(Request $request, Product $product)
             'description' => $validated['description'],
             'price' => $validated['price'],
             'stock' => $validated['stock'],
-            'image' => $validated['image'],
+            'image' => ProductImageUploader::resolve($request, $product->image),
             'is_active' => $request->boolean('is_active'),
         ]);
 
-        return Redirect::route('admin.products.index')->with('success', 'Product is successfully updated!');
+        return Redirect::route('admin.products.index')->with('success', 'Proizvod je uspešno izmenjen.');
     }
 
     /**
@@ -120,6 +122,6 @@ public function update(Request $request, Product $product)
     {
         $product->delete();
 
-        return Redirect::route('admin.products.index')->with('success', 'Product is successfully deleted!');
+        return Redirect::route('admin.products.index')->with('success', 'Proizvod je uspešno obrisan.');
     }
 }
