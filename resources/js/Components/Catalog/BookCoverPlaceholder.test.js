@@ -34,4 +34,18 @@ describe('BookCoverPlaceholder', () => {
         expect(wrapper.text()).toContain('Seobe');
         expect(wrapper.text()).toContain('Miloš Crnjanski');
     });
+
+    it('pada nazad na tipografski placeholder kad <img> ne uspe da se učita (slomljen/nedostupan URL)', async () => {
+        const wrapper = mount(BookCoverPlaceholder, {
+            props: { title: 'Prokleta avlija', author: 'Ivo Andrić', image: 'https://example.com/broken.jpg' },
+        });
+
+        expect(wrapper.find('img').exists()).toBe(true);
+
+        await wrapper.find('img').trigger('error');
+
+        expect(wrapper.find('img').exists()).toBe(false);
+        expect(wrapper.text()).toContain('Prokleta avlija');
+        expect(wrapper.text()).toContain('Ivo Andrić');
+    });
 });

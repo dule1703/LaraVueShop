@@ -45,48 +45,48 @@ const submit = () => {
         Dopuni
     </button>
 
-    <div v-if="open" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-50" @click="open = false"></div>
+    <div v-if="open" class="fixed inset-0 bg-black/50 transition-opacity z-50" @click="open = false"></div>
 
     <div v-if="open" class="fixed inset-0 z-50 overflow-y-auto">
         <div class="flex min-h-full items-center justify-center p-4 text-center">
-            <div class="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all">
-                <h3 class="text-lg font-medium leading-6 text-gray-900">
+            <div class="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                <h3 class="text-lg font-medium leading-6 text-brand-text-primary">
                     Dopuna zaliha
                 </h3>
-                <p class="mt-1 text-sm text-gray-500">{{ bookName }}</p>
+                <p class="mt-1 text-sm text-brand-text-secondary">{{ bookName }}</p>
 
                 <div class="mt-4">
-                    <label class="block text-sm font-medium text-gray-700">Količina</label>
+                    <label class="block text-sm font-medium text-brand-text-primary">Količina</label>
                     <input
                         v-model.number="quantity"
                         type="number"
                         min="1"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        class="mt-1 block w-full rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
                     />
                 </div>
 
                 <div class="mt-4">
-                    <label class="block text-sm font-medium text-gray-700">Napomena (opciono)</label>
+                    <label class="block text-sm font-medium text-brand-text-primary">Napomena (opciono)</label>
                     <input
                         v-model="note"
                         type="text"
                         maxlength="255"
                         placeholder="npr. nova pošiljka od izdavača"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        class="mt-1 block w-full rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
                     />
                 </div>
 
                 <div class="mt-6 flex justify-end gap-3">
                     <button
                         @click="open = false"
-                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                        class="rounded-md border border-black/20 bg-white px-4 py-2 text-sm font-medium text-brand-text-primary shadow-sm hover:bg-brand-card"
                     >
                         Otkaži
                     </button>
                     <button
                         @click="submit"
                         :disabled="processing || !quantity || quantity < 1"
-                        class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50"
+                        class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                     >
                         Sačuvaj
                     </button>
