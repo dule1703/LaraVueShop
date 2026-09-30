@@ -49,7 +49,7 @@ class OrderController extends Controller
             'status' => $validated['status'],
         ]);
 
-        return back()->with('success', 'Order status updated to ' . ucfirst($validated['status']));
+        return back()->with('success', 'Status porudžbine je izmenjen.');
     }
 
     /**
@@ -64,6 +64,6 @@ class OrderController extends Controller
         $order->delete();
 
         return redirect()->route('admin.orders.index')
-            ->with('success', 'Order deleted successfully');
+            ->with('success', 'Porudžbina je obrisana.');
     }
 }
