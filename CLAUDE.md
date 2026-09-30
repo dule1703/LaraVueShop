@@ -934,5 +934,60 @@ istorija (kontrast proba brand-page vs brand-header) u `docs/design.md`.
   `php artisan test` (380 passed, nepromenjeno — nema novih backend testova,
   ovaj korak ne dira backend) prolaze.
 
+## PayPal capture greška — stvarna poruka umesto pogrešne dijagnoze (housekeeping)
+`PaymentFailed.vue` je tvrdila statičan, pogrešan uzrok ("PERMISSION_DENIED —
+Sandbox permission limitation"). Dijagnoza preko produkcionog loga (order
+#21, `PayPal capture error`) je pokazala stvaran uzrok: PayPal
+`error.details[0].issue = INSTRUMENT_DECLINED` — platno sredstvo je odbijeno
+od procesora/banke, nije aplikacijski/permission problem.
+- `PayPalController::success()` — catch grana sad parsira
+  `$response['error']['details'][0]['description']` (fallback
+  `$response['error']['message']`, pa Srpski generički tekst ako ništa od
+  toga ne postoji) i šalje ga kao `flash.error` na `payment.failed` redirect.
+  `$response` je inicijalizovan na `null` PRE `try` bloka — sprečava
+  "undefined variable" upozorenje ako `captureOrder()` baci izuzetak PRE
+  ijedne dodele (npr. mrežna greška, nema strukturiran PayPal odgovor
+  uopšte). Raw JSON i dalje ide u `Log::error` (nepromenjeno) — dijagnoza
+  preko SSH-a i dalje ima pun odgovor za grep, samo se korisniku ne šalje
+  sirov JSON.
+- `PaymentFailed.vue` — ceo pogrešan "Note" blok obrisan. Čita
+  `usePage().props.flash?.error` (isti obrazac kao ostale flash poruke u
+  aplikaciji, `HandleInertiaRequests`) — prikazuje stvarni razlog kad
+  postoji, inače ništa (nema izmišljenog fallback uzroka na stranici; kad
+  bekend nema šta da prosledi, `flash.error` je prazan i "Razlog" blok se ne
+  renderuje). Uklonjen i neiskorišćen `message` prop (nikad nije bio
+  prosleđivan — `routes/web.php` GET `/payment/failed/{order}` šalje samo
+  `order`).
+- **Dizajn (stranica nikad nije prošla kroz Fazu 6):** prebačena na brand-*
+  tokene i srpski tekst, isti vizuelni jezik kao Checkout/Profile
+  (font-serif naslov, `brand-accent` primarno dugme, lucide `XCircle`
+  umesto emoji ✗). Cena ide kroz `formatPrice()` (isti razlog kao katalog —
+  broj sa SQLite-a, string sa MariaDB-a).
+  **Napomena (nije dirano ovim zadatkom):** `OrderSuccess.vue` i
+  `OrderCodSuccess.vue` (sused-stranice u istom `Orders/` folderu) su i
+  dalje na starom indigo/gray/engleskom stilu — nikad nisu prošle kroz Fazu
+  6, isti status kao `PaymentFailed.vue` pre ovog fix-a. Van opsega ovog
+  zadatka (zadatak je eksplicitno naveo samo `PaymentFailed.vue`).
+- Testovi: `tests/Feature/PayPalPaymentTest.php` — postojeći
+  `test_neuspelo_placanje_vraca_zalihu_i_upisuje_stock_movement` proširen sa
+  `assertSessionHas('error', ...)` za generički fallback slučaj (fake gateway
+  bez `error` ključa), nov
+  `test_neuspelo_placanje_prosledjuje_konkretan_paypal_razlog` (fake gateway
+  sa strukturom identičnom stvarnom produkcijskom odgovoru — potvrđuje da se
+  `details[0].description` tačno prosleđuje kao flash poruka). `php artisan
+  test`: 381 passed (380 + 1 nov). `resources/js/Pages/Orders/
+  PaymentFailed.test.js` (nov, 3 testa — prikazuje `flash.error` kad
+  postoji, sakriva "Razlog" blok kad ga nema, ne tvrdi više pogrešnu
+  PERMISSION_DENIED dijagnozu). `npm run test`: 52 passed (49 + 3 nova).
+  `npx vite build` prolazi. Vizuelno provereno (headless Chrome screenshot
+  preko privremene, necommit-ovane preview rute koja simulira ulogovanog
+  korisnika sa `failed` porudžbinom i stvarnim PayPal razlogom u
+  `flash.error` — obrisana posle provere, nije deo PR-a) — kontrast,
+  naslov, dugme, "Razlog" blok sa pravim tekstom.
+
 ## Planirano/otvoreno
-Nema otvorenih stavki u ovom trenutku.
+- **UX stavka (zabeleženo, nije rešeno):** `<select>` sačuvanih adresa na
+  `Checkout.vue` vizuelno izgleda identično tekstualnom input polju —
+  korisnik ne prepoznaje da je dropdown. Razmotriti vizuelni indikator
+  (strelica/drugačiji stil) ili prikaz telefona/poštanskog broja ispod
+  izabrane adrese radi potvrde pre slanja porudžbine.

@@ -90,6 +90,8 @@ class PayPalController extends Controller
             return redirect()->route('checkout')->with('error', 'Nedostaje PayPal token.');
         }
 
+        $response = null;
+
         try {
             // Capture payment
             $response = $this->gateway->captureOrder($paypalOrderId);
@@ -132,8 +134,17 @@ class PayPalController extends Controller
             }
             $this->inventory->restoreStock($order, 'payment_failed', 'failed');
 
+            // PayPal-ov strukturiran odgovor (kad postoji) nosi konkretan razlog
+            // odbijanja (npr. 'INSTRUMENT_DECLINED') u error.details[0].description
+            // — prikazujemo to korisniku umesto generičkog teksta. Raw JSON
+            // (za dijagnozu preko SSH-a) ostaje u Log::error iznad, ne šalje se
+            // na frontend.
+            $reason = $response['error']['details'][0]['description']
+                ?? $response['error']['message']
+                ?? null;
+
             return redirect()->route('payment.failed', $order->id)
-                ->with('error', 'Plaćanje nije moglo biti završeno.');
+                ->with('error', $reason ?? 'Plaćanje nije prihvaćeno od strane PayPal-a ili banke.');
         }
     }
 

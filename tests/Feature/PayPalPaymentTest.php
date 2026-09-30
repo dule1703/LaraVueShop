@@ -207,7 +207,8 @@ class PayPalPaymentTest extends TestCase
 
         $this->actingAs($owner)
             ->get(route('paypal.success', $order) . '?token=PAYPAL-ORDER-1')
-            ->assertRedirect(route('payment.failed', $order));
+            ->assertRedirect(route('payment.failed', $order))
+            ->assertSessionHas('error', 'Plaćanje nije prihvaćeno od strane PayPal-a ili banke.');
 
         $this->assertEquals(4, $product->fresh()->stock);
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'failed']);
@@ -218,6 +219,47 @@ class PayPalPaymentTest extends TestCase
             'order_id' => $order->id,
             'user_id' => $owner->id,
         ]);
+    }
+
+    /**
+     * Kad PayPal vrati strukturiran error (kao u produkcijskom logu, order
+     * #21 — INSTRUMENT_DECLINED), flash poruka nosi konkretan
+     * `error.details[0].description`, ne generički tekst i ne sirov JSON.
+     */
+    public function test_neuspelo_placanje_prosledjuje_konkretan_paypal_razlog(): void
+    {
+        $owner = User::factory()->create();
+        $order = $this->makeOrder($owner);
+        $order->payment()->create([
+            'provider' => 'paypal',
+            'provider_payment_id' => 'PAYPAL-ORDER-1',
+            'amount' => $order->total_price,
+            'currency' => 'EUR',
+            'status' => 'pending',
+        ]);
+
+        $fake = new FakePaymentGateway(captureOrderResponse: [
+            'error' => [
+                'name' => 'UNPROCESSABLE_ENTITY',
+                'details' => [
+                    [
+                        'issue' => 'INSTRUMENT_DECLINED',
+                        'description' => "The instrument presented was either declined by the processor or bank, or it can't be used for this payment.",
+                    ],
+                ],
+                'message' => 'The requested action could not be performed, semantically incorrect, or failed business validation.',
+                'debug_id' => 'f516276495d72',
+            ],
+        ]);
+        $this->app->instance(PaymentGateway::class, $fake);
+
+        $this->actingAs($owner)
+            ->get(route('paypal.success', $order) . '?token=PAYPAL-ORDER-1')
+            ->assertRedirect(route('payment.failed', $order))
+            ->assertSessionHas(
+                'error',
+                "The instrument presented was either declined by the processor or bank, or it can't be used for this payment.",
+            );
     }
 
     public static function ownerGatewayRoutes(): array

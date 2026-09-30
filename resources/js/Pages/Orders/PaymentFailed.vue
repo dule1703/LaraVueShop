@@ -1,48 +1,62 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
+import { XCircle } from 'lucide-vue-next';
+import { computed } from 'vue';
+import { formatPrice } from '@/lib/bookLabels';
 
 defineProps({
     order: Object,
-    message: String, // opciono, ako želiš da proslediš specifičnu poruku iz kontrolera
 });
+
+const page = usePage();
+const reason = computed(() => page.props.flash?.error);
 </script>
 
 <template>
-    <Head title="Payment Failed" />
+    <Head title="Plaćanje nije uspelo" />
 
     <AuthenticatedLayout>
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+        <div class="bg-brand-page py-12">
+            <div class="mx-auto max-w-3xl sm:px-6 lg:px-8">
+                <div class="overflow-hidden rounded-lg bg-white shadow-sm">
                     <div class="p-10 text-center">
-                        <div class="text-red-600 text-8xl mb-8">✗</div>
-                        <h1 class="text-4xl font-bold mb-6 text-red-600">Payment Failed</h1>
+                        <XCircle class="mx-auto mb-6 h-20 w-20 text-red-600" :stroke-width="1.5" />
+                        <h1 class="mb-4 font-serif text-3xl font-semibold text-brand-text-primary">
+                            Plaćanje nije uspelo
+                        </h1>
 
-                        <p class="text-xl mb-8">
-                            Sorry, your payment for order #{{ order.id }} could not be completed.
+                        <p class="mb-6 text-lg text-brand-text-secondary">
+                            Nažalost, plaćanje za porudžbinu #{{ order.id }} nije moglo biti završeno.
                         </p>
 
-                        <div class="text-lg mb-10">
-                            <p>Total amount attempted: <strong>{{ order.total_price }} €</strong></p>
-                            <p class="mt-2">Status: <strong class="text-red-600">{{ order.status }}</strong></p>
-                        </div>
-
-                        <!-- Jasno objašnjenje za portfolio + korisnika -->
-                        <div class="bg-red-50 border-l-4 border-red-400 p-6 mb-8 text-left max-w-3xl mx-auto">
-                            <p class="text-sm text-red-700">
-                                <strong>Note:</strong><br>
-                                This is a test project using PayPal Sandbox mode. Payment capture failed due to PayPal Sandbox permission limitations (PERMISSION_DENIED error – common in test environments).  
-                                In production (live Paypal mode) this would work with proper app verification and webhook support for reliable status updates.                                  
+                        <div class="mb-8 text-base text-brand-text-primary">
+                            <p>Iznos: <strong>{{ formatPrice(order.total_price) }}</strong></p>
+                            <p class="mt-1">
+                                Status:
+                                <strong class="text-red-600">{{ order.status }}</strong>
                             </p>
                         </div>
 
-                        <div class="flex justify-center gap-6">
-                            <a href="/checkout" class="inline-block bg-indigo-600 text-white px-8 py-4 rounded-lg text-lg hover:bg-indigo-700">
-                                Try Again
+                        <div
+                            v-if="reason"
+                            class="mx-auto mb-8 max-w-xl rounded-lg border border-red-200 bg-red-50 p-4 text-left text-sm text-red-700"
+                        >
+                            <strong>Razlog:</strong> {{ reason }}
+                        </div>
+
+                        <div class="flex flex-col justify-center gap-4 sm:flex-row">
+                            <a
+                                href="/checkout"
+                                class="inline-block rounded-lg bg-brand-accent px-8 py-3 text-lg font-medium text-white transition hover:bg-brand-accent-hover"
+                            >
+                                Pokušaj ponovo
                             </a>
-                            <a href="/" class="inline-block bg-gray-600 text-white px-8 py-4 rounded-lg text-lg hover:bg-gray-700">
-                                Back to Shop
+                            <a
+                                href="/shop"
+                                class="inline-block rounded-lg border border-black/20 bg-white px-8 py-3 text-lg font-medium text-brand-text-primary transition hover:bg-brand-card"
+                            >
+                                Nazad u prodavnicu
                             </a>
                         </div>
                     </div>
