@@ -1345,6 +1345,126 @@ postavljena preko `tinker` na test URL, vraćena na `NULL` posle provere —
 preview + "Ukloni trenutnu fotografiju" checkbox), Publishers Index
 (12 izdavača iz dev baze, konzistentno sa Categories iz koraka 1).
 
+## Dizajn — Admin panel, korak 4: Orders (POSLEDNJI korak admin panel faze)
+Ovim je Faza 6 (Shop/Product → Cart/Checkout → Breeze auth → admin panel)
+u celosti gotova.
+
+### Deo 1 — Index.vue
+Prelazi na brand-* tokene, srpski tekst (bilo "Orders"/"Buyer"/"Guest"/
+"Details"), `AdminPageHeader`/`AdminTable` — **bez** dugmeta u header
+akcijama (porudžbine se ne kreiraju ručno kroz admin).
+- Ručno pisana paginacija (duplirala je logiku iz deljene `Pagination.vue`)
+  zamenjena sa `<Pagination :links="orders.links" />` — ista komponenta kao
+  Books/Authors/Publishers.
+- Nov `resources/js/Components/Admin/OrderStatusBadge.vue` — `StatusBadge.vue`
+  iz koraka 1 je boolean (aktivno/neaktivno), ne pokriva 8 mogućih Order
+  statusa. Boje/labele žive u novom `resources/js/lib/orderLabels.js`
+  (`orderStatusLabels`, `orderStatusStyles`) — isti obrazac kao
+  `bookLabels.js`. Boje namerno odstupaju od brand-* palete gde semantika
+  to zahteva (amber=na čekanju, plavo=u obradi/poslato, zeleno=plaćeno/
+  završeno, sivo=dostavljeno, crveno=otkazano/neuspelo) — isti princip kao
+  `StatusBadge` odluka iz koraka 1 (jedna topla boja ne nosi više stanja).
+  Pill oblik/tipografija dosledni ostatku admin panela.
+- `paymentMethodLabels` (isti fajl) — `cod`→"Pouzećem", `paypal`→"PayPal /
+  kartica", isti tekst kao `Checkout.vue`.
+
+### Deo 2 — Show.vue
+Prelazi na brand-* tokene, srpski tekst, isti vizuelni jezik (kartice,
+`font-serif` naslovi).
+- **Adresa isporuke sad čita `shipping_*` snapshot kolone**
+  (`shipping_recipient_name/phone/line1/line2/city/postal_code/country` —
+  imena potvrđena u `database/migrations/
+  2026_09_29_100001_add_shipping_snapshot_to_orders_table.php`), ne stari
+  `order.address`/`city`/`postal_code` string — stari prikaz nije imao
+  `line2` ni državu uopšte, netačno za slanje pošiljke.
+  **Fallback za istorijske porudžbine:** `shipping_*` kolone su nullable i
+  prazne za porudžbine kreirane PRE "Cart/Checkout redizajn + sačuvane
+  adrese" (Faza 6, korak 4) — `hasShippingSnapshot = Boolean(order.
+  shipping_line1)` grana prikaz nazad na stare `address`/`city`/
+  `postal_code`/`phone` kolone (dual-write ih i dalje puni, vidi taj korak)
+  uz kratku napomenu iznad bloka, umesto praznih polja.
+- **Status akcije PROŠIRENE, ne samo redizajnirane.** Stari UI je imao
+  dugmad SAMO kad je `order.status === 'pending'` (Plaćeno/U obradi/
+  Otkazano) — nije postojao put do `shipped`/`delivered` iz UI-ja uopšte,
+  iako ih `OrderController::update()` prihvata. Sad dostupne akcije zavise
+  od TRENUTNOG statusa preko `orderStatusTransitions` mape (nov
+  `resources/js/lib/orderLabels.js`):
+  ```
+  pending    → processing, paid, cancelled   (nepromenjeno iz starog UI-ja)
+  processing → paid, shipped, cancelled
+  paid       → shipped, cancelled
+  shipped    → delivered
+  delivered / completed / cancelled / failed → terminalno, nema akcija
+  ```
+  **Obrazloženje redosleda:** sistem sam postavlja samo `pending`
+  (kreiranje porudžbine), `paid` (uspešan PayPal capture) i `cancelled`/
+  `failed` (PayPal cancel/neuspeh, sa povratom zaliha — Faza 5). Ostala tri
+  statusa (`processing`/`shipped`/`delivered`) su ISKLJUČIVO ručne admin
+  akcije — praktično najviše za COD porudžbine, koje ostaju `pending` dok
+  admin ručno ne vodi kroz tok ispunjenja. Otud je otkazivanje dostupno dok
+  god porudžbina NIJE poslata (posle `shipped` otkazivanje više nema
+  smisla u ovom modelu — roba je već na putu). `completed` nema automatski
+  put do njega (nijedan kod u aplikaciji ga ne postavlja) — ostavljen kao
+  terminalna, bez akcija, dokumentovano ovde radi transparentnosti, ne
+  brisan iz enum-a (backend validacija ga i dalje prihvata, van obima ove
+  izmene da se menja enum). **Ne enforce-uje se na backend-u** —
+  `OrderController::update()` i dalje prihvata bilo koji od 8 statusa
+  (`required|in:...`), ovo je čisto UI vođenje kroz smislen redosled, lako
+  izmenjivo kasnije ako se pokaže pogrešno.
+  Flash poruke u `OrderController::update()`/`destroy()` prevedene na
+  srpski ("Status porudžbine je izmenjen.", "Porudžbina je obrisana.").
+- Native `confirm()` za promenu statusa ostaje (nije destruktivna akcija,
+  poseban modal bi bio nepotrebno širenje obima). Brisanje porudžbine sad
+  ide preko postojeće `DeleteConfirmation.vue` (dosledno ostalih 5 admin
+  sekcija) umesto native `confirm()`.
+
+### Deo 3 — NAMERNO NEDIRANO (van obima ovog koraka)
+- **OTVORENO PITANJE:** otkazivanje porudžbine iz admin panela (ručna akcija
+  na `pending`/`processing`/`paid`) trenutno NE vraća zalihu —
+  `OrderController::update()` samo menja status, za razliku od PayPal
+  cancel/fail toka (`InventoryService::restoreStock`, Faza 5) koji povrat
+  zaliha radi automatski. Ovo je poslovna odluka, ne dizajn — nije menjano
+  ovim korakom (isti princip kao deaktivirana kategorija u
+  `Admin/Products/Edit.vue`, korak 2). Ako admin ručno otkaže porudžbinu,
+  zaliha ostaje umanjena kao da je porudžbina i dalje aktivna — treba
+  odlučiti da li `OrderController::update()` treba da pozove
+  `InventoryService::restoreStock()` kad novi status postane `cancelled`
+  (isti obrazac kao PayPal tok), pre nego što se ovo osloni na admin da
+  ručno prati/koriguje zalihu.
+- Autorizacija (`admin` middleware) — nedirana, van obima ovog koraka.
+
+### Testovi
+Postojeći `tests/Feature/Admin/AdminAccessTest.php` (`orders.index/show/
+update/destroy` u centralnoj listi) i dalje prolaze nepromenjeni — ne
+asertuju na markup/tekst, samo status kod/DB (isti oprez kao ranije,
+potvrđeno pokretanjem). Backend transition logiku NE enforce-uje (vidi
+Deo 2), pa nema novih backend testova za redosled prelaza.
+Nov `resources/js/Pages/Admin/Orders/Show.test.js` (9 testova, vitest) —
+pokriva status-prelaz UI logiku direktno (pending/processing/paid/shipped
+prikazuju očekivana dugmad, delivered/cancelled/failed/completed su
+terminalni bez ijednog dugmeta, klik zove `router.patch` sa tačnim
+statusom) i adresu isporuke (koristi `shipping_*` kad postoji, pada nazad
+na stara polja kad ne postoji). `route()` u `<template>`-u (DeleteConfirmation
+`:delete-url`) mockovan preko `global.mocks`, `route()` u `<script setup>`
+JS pozivima preko `globalThis.route` — isti gotcha kao Shop.test.js/
+Checkout.test.js iz ranijih koraka (vidi CLAUDE.md "Pretraga i filteri
+kataloga").
+Pun suite: `php artisan test` — **398 passed** (nepromenjeno — samo
+prevod flash poruka, bez nove backend logike koja bi trebalo testirati).
+`npm run test`: 62 passed (53 + 9 novih). `npx vite build` prolazi.
+Vizuelno provereno (headless Chrome screenshot preko privremene,
+necommit-ovane preview rute — obrisana posle provere): Orders Index
+(bedževi u 5 boja, pagination), Show za `processing` (tri dugmeta: Plaćeno/
+Poslato/Otkazano), `shipped` (samo Dostavljeno), i legacy porudžbinu bez
+`shipping_*` snapshot-a (fallback tekst + stara polja). Test podaci (6
+porudžbina, po jedna za svaki relevantan status) kreirani preko `tinker` i
+obrisani odmah posle provere — nisu deo PR-a niti ostali u dev bazi.
+Usput otkriven i ispravljen sitan whitespace bag: "Registrovan korisnik:"
+i vrednost su se lepili bez razmaka kad su `<dt>`/`<dd>` bili na odvojenim
+linijama u template-u (Vue-ov whitespace: 'condense' briše newline između
+tagova, ne kolabira ga u razmak) — ispravljeno spajanjem na jednu liniju,
+isti obrazac kao ostali `<dt>`/`<dd>` parovi na istoj stranici.
+
 ## Planirano/otvoreno
 - **UX stavka (zabeleženo, nije rešeno):** `<select>` sačuvanih adresa na
   `Checkout.vue` vizuelno izgleda identično tekstualnom input polju —
