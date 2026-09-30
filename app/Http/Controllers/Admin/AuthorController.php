@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AuthorRequest;
 use App\Models\Author;
+use App\Support\ProductImageUploader;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,7 +26,11 @@ class AuthorController extends Controller
 
     public function store(AuthorRequest $request): RedirectResponse
     {
-        Author::create($request->validated());
+        $data = $request->validated();
+        unset($data['remove_photo']);
+        $data['photo'] = ProductImageUploader::resolve($request, null, 'photo', 'remove_photo', 'authors');
+
+        Author::create($data);
 
         return redirect()->route('admin.authors.index')->with('success', 'Autor je uspešno dodat.');
     }
@@ -37,7 +42,11 @@ class AuthorController extends Controller
 
     public function update(AuthorRequest $request, Author $author): RedirectResponse
     {
-        $author->update($request->validated());
+        $data = $request->validated();
+        unset($data['remove_photo']);
+        $data['photo'] = ProductImageUploader::resolve($request, $author->photo, 'photo', 'remove_photo', 'authors');
+
+        $author->update($data);
 
         return redirect()->route('admin.authors.index')->with('success', 'Autor je uspešno izmenjen.');
     }

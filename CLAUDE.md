@@ -1259,6 +1259,92 @@ tabela/header komponenta.
   mid-load stanje pre nego što je slika stigla, drugi sa dužim
   `--virtual-time-budget` je potvrdio ispravan prikaz).
 
+## Dizajn — Admin panel, korak 3: Authors + Publishers
+
+### Deo 1 — Authors
+Prelazi na brand-* tokene, srpski tekst, `AdminPageHeader`/`AdminTable`
+(BEZ `StatusBadge` — `Author` nema `is_active`/status polje). Index
+zadržava kolonu "Knjiga" (`books_count`) i `Pagination`, nedirano
+funkcionalno.
+- **`authors.photo` prebačen sa URL text input-a na pravi file upload**
+  (multipart, `mimes:jpg,jpeg,png,webp`, `max:2048`, isti `'public'` disk),
+  isti obrazac kao `products.image` iz koraka 2 (Deo 2).
+- **Generalizacija umesto duplirane klase:** `app/Support/
+  ProductImageUploader.php::resolve()` je parametrizovan sa tri nova
+  opciona argumenta — `$fileField = 'image'`, `$removeField =
+  'remove_image'`, `$folder = 'products'`. Svi postojeći pozivi
+  (Products/Books, korak 2) ih izostavljaju i zadržavaju stare default-e —
+  ponašanje im nepromenjeno (potvrđeno: `ProductImageUploadTest`, 9/9,
+  prolazi bez izmena). `AuthorController::store/update` pozivaju
+  `ProductImageUploader::resolve($request, $currentPhoto, 'photo',
+  'remove_photo', 'authors')`. Izabrana generalizacija umesto tankog
+  analognog `AuthorPhotoUploader`-a jer je izmena čisto aditivna (nova
+  opciona polja sa default-ima koji reprodukuju staro ponašanje) — nije
+  bilo potrebe dirati `ProductController`/`BookController`/`BookRequest`
+  pozive, pa nije bilo rizika za regresiju na već mergovanom kodu iz
+  koraka 2.
+  `AuthorRequest::rules()`: `photo` sad `nullable|file|mimes:...|max:2048`
+  (bilo `nullable|url|max:255`), dodato `remove_photo =>
+  nullable|boolean`. `AuthorController::store/update` grade `$data` iz
+  `$request->validated()`, uklanjaju `remove_photo` (nije `authors`
+  kolona) i prepisuju `photo` rezolvovanom vrednošću — isti obrazac kao
+  `BookRequest::productAttributes()` + `ProductImageUploader::resolve()`
+  u `BookController` (korak 2).
+- `AuthorForm.vue`: prepisan po uzoru na `BookForm.vue` (koristi
+  `InputLabel`/`TextInput`/`InputError`/`Checkbox`/`PrimaryButton`, `file:*`
+  Tailwind varijante za file input, preview trenutne fotografije preko
+  `BookCoverPlaceholder` — radi i za autora bez ijedne izmene, `author`
+  prop u `BookCoverPlaceholder` je opcioni sa default-om `''`).
+  **Thumbnail oblik: kvadratni (`rounded-lg`), NE kružni (`rounded-full`)**
+  — vizuelno provereno da kružni `overflow-hidden` maskira
+  `BookCoverPlaceholder`-ov tipografski fallback (placeholder tekst je
+  layoutovan za kvadrat/`line-clamp`, kružna maska mu odseca uglove i tekst
+  postaje nečitljiv na malim veličinama, npr. 48×48 u Index tabeli). Isti
+  fallback se koristi i za placeholder BEZ fotografije (većina autora u dev
+  bazi trenutno nema `photo`), pa je ovo česta putanja, ne rubni slučaj —
+  zadržan kvadratni oblik i u Index tabeli (48×48) i u forma-preview-u
+  (128×128), isti kao Products/Books (korak 2), umesto uvođenja novog
+  oblika samo za autore.
+- `Admin/Authors/Index.vue`: dodata kolona "Fotografija" (thumbnail,
+  `BookCoverPlaceholder`), stranica prebačena na `bg-brand-page` wrapper +
+  `flash.error` prikaz (ranije je postojao samo `flash.success`, isti kao
+  `Admin/Books/Index.vue` otkad postoji `error` flash za "autor ima
+  knjige, ne može se obrisati").
+
+### Deo 2 — Publishers
+`Publisher` nema sliku ni status polje (samo `name`/`slug`/`website`) —
+najprostiji preostali CRUD, čisto vizuelni prelaz na brand-* tokene +
+`AdminPageHeader`/`AdminTable` (isti obrazac kao Categories u koraku 1).
+Nikakve backend izmene — `PublisherController`/`PublisherRequest` već
+imaju srpske flash poruke i ispravnu `website` (`url`) validaciju od
+ranije, nedirano.
+
+### Testovi
+`AuthorPublisherCrudTest.php` (postojeći, 10 testova) — dva testa su slala
+`photo` kao URL string (isti problem kao `BuildsBookPayload` u koraku 2,
+Deo 2): `test_admin_dodaje_autora_...` je jednostavno izostavio `photo` iz
+payload-a (nije predmet tog testa), `test_autor_zahteva_ime_...` je
+preimenovan u `..._ispravan_tip_fotografije` i sad šalje
+`UploadedFile::fake()->create('dokument.pdf', ...)` umesto stringa
+`'nije-url'`. Svih 10 i dalje prolazi.
+Nov `tests/Feature/Admin/AuthorPhotoUploadTest.php` (5 testova — manji
+skup od `ProductImageUploadTest`-a, ista logika je već pokrivena tamo):
+upload pri kreiranju, izmena bez nove fotografije ne menja postojeću,
+`remove_photo` briše fajl i vrednost, zamena briše staru LOKALNU
+fotografiju, zamena NE dira eksterni URL.
+Pun suite: `php artisan test` — **398 passed** (393 + 5 novih). `npm run
+test`: 53 passed (nepromenjeno — nema novih JS testova, isti razlog kao
+korak 1: nema postojeće vitest infrastrukture za admin Vue stranice van
+onoga što je već pokriveno). `npx vite build` prolazi. Vizuelno provereno
+(headless Chrome screenshot preko privremene, necommit-ovane preview rute
+koja loguje postojećeg admin korisnika iz dev baze — obrisana posle
+provere, nije deo PR-a): Authors Index (kvadratni thumbnail-ovi, prazan
+placeholder za autore bez fotografije), Authors Create (prazna forma sa
+file input-om), Authors Edit (postojeća fotografija — privremeno
+postavljena preko `tinker` na test URL, vraćena na `NULL` posle provere —
+preview + "Ukloni trenutnu fotografiju" checkbox), Publishers Index
+(12 izdavača iz dev baze, konzistentno sa Categories iz koraka 1).
+
 ## Planirano/otvoreno
 - **UX stavka (zabeleženo, nije rešeno):** `<select>` sačuvanih adresa na
   `Checkout.vue` vizuelno izgleda identično tekstualnom input polju —

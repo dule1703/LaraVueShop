@@ -29,7 +29,12 @@ class AuthorRequest extends FormRequest
                 Rule::unique('authors', 'slug')->ignore($this->route('author')),
             ],
             'bio' => ['nullable', 'string'],
-            'photo' => ['nullable', 'url', 'max:255'],
+            // Rešavanje stvarne authors.photo vrednosti (upload/remove_photo/
+            // nedirnuto) ide preko ProductImageUploader-a u AuthorController-u,
+            // ne ovde — isti razlog kao 'image' u BookRequest-u (FormRequest
+            // nema pristup postojećoj vrednosti bez route-bound $author).
+            'photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_photo' => ['nullable', 'boolean'],
         ];
     }
 }
