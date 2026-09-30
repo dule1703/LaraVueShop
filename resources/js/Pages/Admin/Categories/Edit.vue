@@ -1,6 +1,12 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import AdminPageHeader from '@/Components/Admin/AdminPageHeader.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import TextInput from '@/Components/TextInput.vue';
+import InputError from '@/Components/InputError.vue';
+import Checkbox from '@/Components/Checkbox.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     category: Object
@@ -14,47 +20,57 @@ const form = useForm({
 </script>
 
 <template>
-    <Head title="Edit category" />
+    <Head title="Izmeni kategoriju" />
 
     <AuthenticatedLayout>
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 bg-white border-b border-gray-200">
-                        <h1 class="text-2xl font-bold mb-6">Edit category</h1>
+        <div class="min-h-screen bg-brand-page py-8 md:py-12">
+            <div class="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
+                <AdminPageHeader title="Izmeni kategoriju" />
 
-                        <form @submit.prevent="form.put(route('admin.categories.update', category.id))">
-                            <div class="grid grid-cols-1 gap-6">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Name</label>
-                                    <input v-model="form.name" type="text" required
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-                                    <div v-if="form.errors.name" class="text-red-600 text-sm mt-1">{{ form.errors.name }}</div>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Description (optional)</label>
-                                    <textarea v-model="form.description" rows="4"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
-                                </div>
-
-                                <div class="flex items-center">
-                                    <input v-model="form.is_active" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
-                                    <label class="ml-2 block text-sm text-gray-900">Active category</label>
-                                </div>
-
-                                <div class="flex justify-end gap-4">
-                                    <Link :href="route('admin.categories.index')" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
-                                        Cancel
-                                    </Link>
-                                    <button type="submit" :disabled="form.processing"
-                                        class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50">
-                                        Save
-                                    </button>
-                                </div>
+                <div class="rounded-2xl border border-black/5 bg-white p-6 shadow-sm">
+                    <form @submit.prevent="form.put(route('admin.categories.update', category.id))">
+                        <div class="grid grid-cols-1 gap-6">
+                            <div>
+                                <InputLabel for="name" value="Naziv" />
+                                <TextInput
+                                    id="name"
+                                    v-model="form.name"
+                                    type="text"
+                                    required
+                                    class="mt-1 block w-full"
+                                />
+                                <InputError class="mt-2" :message="form.errors.name" />
                             </div>
-                        </form>
-                    </div>
+
+                            <div>
+                                <InputLabel for="description" value="Opis (opciono)" />
+                                <textarea
+                                    id="description"
+                                    v-model="form.description"
+                                    rows="4"
+                                    class="mt-1 block w-full rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
+                                ></textarea>
+                                <InputError class="mt-2" :message="form.errors.description" />
+                            </div>
+
+                            <label class="flex items-center gap-2">
+                                <Checkbox v-model:checked="form.is_active" />
+                                <span class="text-sm text-brand-text-primary">Aktivna kategorija</span>
+                            </label>
+
+                            <div class="flex justify-end gap-4">
+                                <Link
+                                    :href="route('admin.categories.index')"
+                                    class="inline-flex items-center rounded-md border border-black/20 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-brand-text-primary shadow-sm transition duration-150 ease-in-out hover:bg-brand-card"
+                                >
+                                    Otkaži
+                                </Link>
+                                <PrimaryButton :disabled="form.processing">
+                                    Sačuvaj
+                                </PrimaryButton>
+                            </div>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
