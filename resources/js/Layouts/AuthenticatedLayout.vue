@@ -25,13 +25,13 @@ const cart = useCartStore();
             <div class="flex">
               <!-- Logo -->
               <div class="flex shrink-0 items-center">
-                <Link :href="route('home')" class="text-xl text-brand-header-text">
+                <Link :href="route('home')" class="text-2xl text-brand-header-text">
                   <Logo />
                 </Link>
               </div>
               <!-- Navigation Links -->
               <div class="hidden space-x-8 md:-my-px md:ms-10 md:flex">
-                <NavLink :href="route('shop')" :active="route().current('shop')" class="font-semibold">
+                <NavLink :href="route('shop')" :active="route().current('shop')" size="base" class="font-semibold">
                   Shop
                 </NavLink>
               </div>

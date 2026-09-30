@@ -5,6 +5,7 @@ import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { useCartStore } from '@/Stores/cart';
 import { computed, onMounted } from 'vue';
 import { formatPrice } from '@/lib/bookLabels';
+import { ChevronDown } from 'lucide-vue-next';
 
 const props = defineProps({
     addresses: { type: Array, default: () => [] },
@@ -167,16 +168,19 @@ const submit = () => {
 
                     <div v-if="showAddressSelect" class="mb-4">
                         <label for="address_id" class="block text-xs font-medium uppercase tracking-wide text-brand-text-secondary mb-1">Adresa</label>
-                        <select
-                            id="address_id"
-                            v-model="form.address_id"
-                            class="block w-full appearance-none rounded-lg border border-black/10 bg-white py-2 px-3 text-sm text-brand-text-primary focus:border-brand-accent focus:ring-brand-accent"
-                        >
-                            <option v-for="address in addresses" :key="address.id" :value="address.id">
-                                {{ addressLabel(address) }}
-                            </option>
-                            <option :value="null">+ Nova adresa</option>
-                        </select>
+                        <div class="relative">
+                            <select
+                                id="address_id"
+                                v-model="form.address_id"
+                                class="block w-full cursor-pointer appearance-none rounded-lg border border-black/10 bg-white py-2 pl-3 pr-10 text-sm text-brand-text-primary focus:border-brand-accent focus:ring-brand-accent"
+                            >
+                                <option v-for="address in addresses" :key="address.id" :value="address.id">
+                                    {{ addressLabel(address) }}
+                                </option>
+                                <option :value="null">+ Nova adresa</option>
+                            </select>
+                            <ChevronDown class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-text-secondary" />
+                        </div>
                         <InputError class="mt-1" :message="form.errors.address_id" />
                     </div>
 
