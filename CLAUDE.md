@@ -1419,18 +1419,12 @@ Prelazi na brand-* tokene, srpski tekst, isti vizuelni jezik (kartice,
   sekcija) umesto native `confirm()`.
 
 ### Deo 3 — NAMERNO NEDIRANO (van obima ovog koraka)
-- **OTVORENO PITANJE:** otkazivanje porudžbine iz admin panela (ručna akcija
-  na `pending`/`processing`/`paid`) trenutno NE vraća zalihu —
-  `OrderController::update()` samo menja status, za razliku od PayPal
-  cancel/fail toka (`InventoryService::restoreStock`, Faza 5) koji povrat
-  zaliha radi automatski. Ovo je poslovna odluka, ne dizajn — nije menjano
-  ovim korakom (isti princip kao deaktivirana kategorija u
-  `Admin/Products/Edit.vue`, korak 2). Ako admin ručno otkaže porudžbinu,
-  zaliha ostaje umanjena kao da je porudžbina i dalje aktivna — treba
-  odlučiti da li `OrderController::update()` treba da pozove
-  `InventoryService::restoreStock()` kad novi status postane `cancelled`
-  (isti obrazac kao PayPal tok), pre nego što se ovo osloni na admin da
-  ručno prati/koriguje zalihu.
+- Otkazivanje porudžbine iz admin panela tada NIJE vraćalo zalihu (samo
+  `$order->update()`), za razliku od PayPal cancel/fail toka
+  (`InventoryService::restoreStock`, Faza 5). **✅ REŠENO naknadno u
+  housekeeping čišćenju** (vidi "Housekeeping — UX doslednost + otkazivanje
+  vraća zalihu" niže) — zabeleženo ovde samo kao istorijski kontekst zašto
+  ovaj korak nije dirao to ponašanje.
 - Autorizacija (`admin` middleware) — nedirana, van obima ovog koraka.
 
 ### Testovi
@@ -1465,16 +1459,85 @@ linijama u template-u (Vue-ov whitespace: 'condense' briše newline između
 tagova, ne kolabira ga u razmak) — ispravljeno spajanjem na jednu liniju,
 isti obrazac kao ostali `<dt>`/`<dd>` parovi na istoj stranici.
 
+## Housekeeping — UX doslednost + otkazivanje vraća zalihu
+Čišćenje 4 sitne, nepovezane stavke (3 su bile zabeležene kao otvorene u
+ovom fajlu, 1 nova) — ne nova faza, jednokratni housekeeping PR.
+
+**Deo 1 — Logo/Shop istaknutiji u headeru.** `AuthenticatedLayout.vue`:
+logo link `text-xl` → `text-2xl` (`Logo.vue` sam skalira ikonu/tekst preko
+nasleđenog `font-size`, nedirano). `NavLink.vue` dobija opcioni `size` prop
+(`'sm'` default, `'base'` za veći tekst) — menja se UNUTAR istog
+`computed()` bloka koji već gradi klase, ne kroz spoljni `class` override
+(Tailwind-ov generisani CSS ne garantuje redosled klasa iz template-a, pa bi
+spoljni `text-base` mogao tiho izgubiti od unutrašnjeg `text-sm`). Samo Shop
+link u headeru dobija `size="base"` (pored postojećeg `font-semibold`);
+svih 6 admin nav linkova (Categories/Products/Books/Authors/Publishers/
+Orders) ostaju na default `'sm'` preko istog `NavLink.vue`, nedirano.
+`GuestLayout.vue` logo (`text-4xl`) nije dirano — drugačiji kontekst (auth
+stranice, bez Shop linka pored za poređenje), vizuelno već dovoljno
+istaknut.
+
+**Deo 2 — Select sačuvanih adresa vizuelno nerazlučiv od text inputa**
+(`Checkout.vue`). Dodat `lucide-vue-next` `ChevronDown` apsolutno
+pozicioniran desno u polju (`pointer-events-none` da ne ometa klik na sam
+select) + `cursor-pointer` na samom `<select>`-u — čisto vizuelna
+afordanca, funkcionalnost (`v-model="form.address_id"`) nedirana.
+
+**Deo 3 — Deaktivirana kategorija prazan select** (`Admin/Products/
+Edit.vue`). Potvrđen uzrok: `ProductController::edit()` šalje `categories`
+prop filtriran na `is_active=true`; ako proizvod pripada kategoriji koja je
+u međuvremenu deaktivirana (npr. preko `catalog:cleanup-legacy-categories`,
+Faza 3 deo 3), `form.category_id` se ne poklapa ni sa jednim `<option>` i
+select izgleda prazan. Fix: nov `categoryOptions` computed u `Edit.vue`
+— ako trenutna kategorija proizvoda nije među aktivnim, doda se na kraj
+liste sa oznakom "(neaktivna)" u tekstu opcije (npr. "Electronics
+(neaktivna)"), umesto da bude tiho izostavljena. Čisto frontend fix, bez
+backend izmene — `product.category` relacija je već bila učitana i
+prosleđena (`$product->load('category')`), samo nekorišćena za ovu svrhu.
+**Napomena:** identičan filter (`is_active=true` bez uključivanja trenutne
+kategorije) postoji i u `BookController::formOptions()` za Books
+Create/Edit — nije potvrđeno da se manifestuje (knjige se ređe prebacuju
+u legacy kategorije), ali isti obrazac fix-a bi važio ako se ikad primeti;
+nije dirano ovim taskom (van navedenog obima, samo `Products/Edit.vue`).
+
+**Deo 4 — Ručno otkazivanje porudžbine ne vraća zalihu**
+(`Admin/Orders`, otvoreno od koraka 4). `InventoryService::restoreStock()`
+već postoji i radi tačno ovo (Faza 5) — `OrderController::update()` (Admin)
+sad ga poziva kad `$validated['status'] === 'cancelled'`, umesto plain
+`$order->update()`. Za SVE ostale statuse (`processing`/`paid`/`shipped`/
+`delivered`/...) ostaje nepromenjen plain update — `restoreStock()` je
+namenjen isključivo terminalnom "porudžbina neće biti ispunjena" prelazu i
+sam postavlja status unutar zaključane transakcije (ne duplirati poziv).
+`reason` string: `'admin_cancel'` — postojeći PayPal pozivi koriste
+`'cancel'` (buyer/PayPal-inicirano otkazivanje) i `'payment_failed'`, nova
+vrednost razlikuje trigger izvor u `stock_movements` istoriji. Dodato u
+`StockMovement::REASONS` konstantu (bila zatvorena lista `['order',
+'cancel', 'payment_failed', 'restock', 'manual']`, sad + `'admin_cancel'`)
+— `tests/Feature/Catalog/StockMovementTest.php` asertuje `reason` protiv
+ove konstante, pa je trebalo produžiti listu, ne samo koristiti vrednost
+mimo nje. `Admin\OrderController` sad prima `InventoryService` kroz
+konstruktor (isti obrazac kao `BookController`), ne `app()` helper.
+
+### Testovi
+Nov `tests/Feature/Admin/OrderStatusUpdateTest.php` (3 testa, isti obrazac
+kao `PayPalPaymentTest.php`'s restoreStock testovi): otkazivanje vraća
+zalihu i upisuje `stock_movements` red (`reason = 'admin_cancel'`),
+dvostruko otkazivanje ne duplira povrat (isti guard kao PayPal tok), ostali
+statusi (npr. `shipped`) ne diraju zalihu niti upisuju `stock_movements`.
+Postojeći `AdminAccessTest::test_admin_can_update_order_status` (status
+`shipped`, ne `cancelled`) i `StockMovementTest` i dalje prolaze
+nepromenjeni. `php artisan test`: **401 passed** (398 + 3 nova). `npm run
+test`: 62 passed (nepromenjeno — Deo 1-3 su čist CSS/markup/select-opcije,
+bez nove JS logike koja bi trebalo testirati; potvrđeno pokretanjem da
+postojeći `Checkout.test.js` i dalje prolazi). `npx vite build` prolazi.
+Vizuelno provereno (headless Chrome screenshot preko privremene,
+necommit-ovane preview rute — obrisana posle provere, test adresa kreirana
+za proveru Dela 2 obrisana odmah posle): header sa istaknutim Shop linkom
+(`/shop`), Checkout select sa ChevronDown strelicom (privremena sačuvana
+adresa admin naloga), `Admin/Products/Edit.vue` za proizvod #3 (Sony
+slušalice, kategorija "Electronics" deaktivirana preko ranijeg
+`catalog:cleanup-legacy-categories`) — select sad prikazuje "Electronics
+(neaktivna)" umesto praznog polja.
+
 ## Planirano/otvoreno
-- **UX stavka (zabeleženo, nije rešeno):** `<select>` sačuvanih adresa na
-  `Checkout.vue` vizuelno izgleda identično tekstualnom input polju —
-  korisnik ne prepoznaje da je dropdown. Razmotriti vizuelni indikator
-  (strelica/drugačiji stil) ili prikaz telefona/poštanskog broja ispod
-  izabrane adrese radi potvrde pre slanja porudžbine.
-- **Sitan UX bag (zabeleženo, nije rešeno):** `Admin/Products/Edit.vue`
-  "Kategorija" select prikazuje prazno za proizvode iz deaktivirane
-  kategorije (vidi "Admin panel korak 2, Deo 4" gore) — select bi trebalo
-  da uključi i trenutnu kategoriju proizvoda čak i ako je deaktivirana
-  (npr. dodatna `<option>` van `v-for` liste kad `product.category_id` nije
-  među aktivnim), ili da jasno prikaže "Kategorija je deaktivirana:
-  {ime}" umesto praznog select-a.
+Trenutno nema otvorenih UX/dizajn stavki.

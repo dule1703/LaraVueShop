@@ -14,7 +14,7 @@ class StockMovement extends Model
 
     public const UPDATED_AT = null;
 
-    public const REASONS = ['order', 'cancel', 'payment_failed', 'restock', 'manual'];
+    public const REASONS = ['order', 'cancel', 'payment_failed', 'restock', 'manual', 'admin_cancel'];
 
     protected $fillable = [
         'product_id',
