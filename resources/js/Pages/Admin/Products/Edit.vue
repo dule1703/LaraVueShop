@@ -8,11 +8,26 @@ import Checkbox from '@/Components/Checkbox.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import BookCoverPlaceholder from '@/Components/Catalog/BookCoverPlaceholder.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     product: Object,
     categories: Array
+});
+
+// `categories` prop sadrži SAMO aktivne kategorije (ProductController::edit()).
+// Ako je proizvod u međuvremenu ostao u DEAKTIVIRANOJ kategoriji (npr. posle
+// catalog:cleanup-legacy-categories, Faza 3 deo 3), form.category_id se ne
+// poklapa ni sa jednim <option> i select izgleda prazan — admin bi lako
+// nehotice promenio kategoriju prilikom snimanja. Dodajemo trenutnu
+// kategoriju proizvoda u listu (obeleženu "(neaktivna)") umesto da je
+// tiho izostavimo.
+const categoryOptions = computed(() => {
+    const hasCurrentCategory = props.categories.some((c) => c.id === props.product.category_id);
+    if (hasCurrentCategory || !props.product.category) {
+        return props.categories;
+    }
+    return [...props.categories, { id: props.product.category.id, name: `${props.product.category.name} (neaktivna)` }];
 });
 
 const form = useForm({
@@ -66,7 +81,7 @@ watch(() => form.remove_image, (removed) => {
                                     class="mt-1 block w-full rounded-md border-black/20 text-brand-text-primary shadow-sm focus:border-brand-accent focus:ring-brand-accent"
                                 >
                                     <option value="">Izaberi kategoriju</option>
-                                    <option v-for="category in categories" :key="category.id" :value="category.id">
+                                    <option v-for="category in categoryOptions" :key="category.id" :value="category.id">
                                         {{ category.name }}
                                     </option>
                                 </select>
