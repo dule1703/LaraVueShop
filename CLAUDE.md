@@ -1595,8 +1595,22 @@ brisanje proizvoda iz porudžbina).
   sledećem koraku.
 - `Admin\BookController::destroy` i dalje odbija knjigu iz porudžbine (nije
   menjano) iako bi soft delete to sada dozvolio — poslovna odluka, otvoreno.
-- Testovi: `tests/Feature/Catalog/SoftDeleteTest.php` (12). Pun suite:
-  `php artisan test` 415 passed.
+- **Validacija i soft delete:** `unique` nad `products.name`/`categories.name`
+  (store i update, `ProductController`/`CategoryController`) i `products.slug`
+  (`BookRequest`) koristi `Rule::unique(...)->whereNull('deleted_at')`, a
+  `category_id` `Rule::exists('categories','id')->whereNull('deleted_at')` —
+  soft-obrisan naziv ne blokira novi unos, a obrisana kategorija se ne prihvata.
+  `ImportBooks` nije menjan: koristi `where('slug')` upite (global scope
+  izuzima obrisane) a slug obrisanih redova je već preimenovan. `OrderController`
+  `exists:products,id` namerno ostavljen: `Product::find` odmah posle daje
+  poruku "knjiga više ne postoji".
+- **Gotcha:** `catch (QueryException)` bez `use Illuminate\Database\QueryException;`
+  u namespace-u kontrolera tiho ne hvata ništa (nepostojeća klasa, bez greške) —
+  uhvaćeno tek pregledom PR-a; test forsira izuzetak preko `Model::deleting()`
+  listenera i proverava flash `error`. Ne koristiti `sed` za višelinijske/
+  backslash izmene `use` linija u Git Bash-u (tiho ne pogodi) — proveri `grep`-om.
+- Testovi: `tests/Feature/Catalog/SoftDeleteTest.php` (17). Pun suite:
+  `php artisan test` 420 passed.
 
 ## Planirano/otvoreno
 Trenutno nema otvorenih UX/dizajn stavki.

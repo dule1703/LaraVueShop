@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Services\InventoryService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -247,5 +248,93 @@ class SoftDeleteTest extends TestCase
         ])->assertStatus(422);
 
         $this->assertSame(5, (int) Product::withTrashed()->find($product->id)->stock);
+    }
+    private function forcedQueryException(): QueryException
+    {
+        return new QueryException('sqlite', 'delete from x', [], new RuntimeException('forsirano'));
+    }
+
+    public function test_destroy_proizvoda_hvata_query_exception_i_vraca_flash_error(): void
+    {
+        $product = Product::factory()->create();
+        Product::deleting(function () {
+            throw $this->forcedQueryException();
+        });
+
+        $this->actingAs($this->admin())
+            ->delete(route('admin.products.destroy', $product))
+            ->assertRedirect(route('admin.products.index'))
+            ->assertSessionHas('error');
+
+        $this->assertNotSoftDeleted($product);
+    }
+
+    public function test_destroy_kategorije_hvata_query_exception_i_vraca_flash_error(): void
+    {
+        $category = Category::factory()->create();
+        Category::deleting(function () {
+            throw $this->forcedQueryException();
+        });
+
+        $this->actingAs($this->admin())
+            ->delete(route('admin.categories.destroy', $category))
+            ->assertRedirect(route('admin.categories.index'))
+            ->assertSessionHas('error');
+
+        $this->assertNotSoftDeleted($category);
+    }
+
+    public function test_soft_obrisan_naziv_proizvoda_ne_blokira_novi_unos_ni_izmenu(): void
+    {
+        $category = Category::factory()->active()->create();
+        Product::factory()->for($category)->create(['name' => 'Prokleta avlija'])->delete();
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->post(route('admin.products.store'), [
+            'category_id' => $category->id, 'name' => 'Prokleta avlija', 'price' => 10, 'stock' => 3, 'description' => null,
+        ])->assertSessionHasNoErrors()->assertRedirect(route('admin.products.index'));
+        $this->assertSame(1, Product::where('name', 'Prokleta avlija')->count());
+
+        // Živ duplikat i dalje je blokiran.
+        $this->actingAs($admin)->post(route('admin.products.store'), [
+            'category_id' => $category->id, 'name' => 'Prokleta avlija', 'price' => 10, 'stock' => 3, 'description' => null,
+        ])->assertSessionHasErrors('name');
+
+        // Update drugog proizvoda na naziv obrisanog proizvoda.
+        Product::factory()->for($category)->create(['name' => 'Staro ime'])->delete();
+        $other = Product::factory()->for($category)->create(['name' => 'Drugo']);
+        $this->actingAs($admin)->put(route('admin.products.update', $other), [
+            'category_id' => $category->id, 'name' => 'Staro ime', 'price' => 10, 'stock' => 3, 'description' => null,
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('Staro ime', $other->fresh()->name);
+    }
+
+    public function test_soft_obrisan_naziv_kategorije_ne_blokira_novi_unos_ni_izmenu(): void
+    {
+        Category::factory()->create(['name' => 'Poezija', 'description' => null])->delete();
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->post(route('admin.categories.store'), ['name' => 'Poezija', 'description' => null])
+            ->assertSessionHasNoErrors()->assertRedirect(route('admin.categories.index'));
+        $this->assertSame(1, Category::where('name', 'Poezija')->count());
+
+        $this->actingAs($admin)->post(route('admin.categories.store'), ['name' => 'Poezija', 'description' => null])
+            ->assertSessionHasErrors('name');
+
+        Category::factory()->create(['name' => 'Drama', 'description' => null])->delete();
+        $other = Category::factory()->create(['name' => 'Ostalo']);
+        $this->actingAs($admin)->put(route('admin.categories.update', $other), ['name' => 'Drama', 'description' => null])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('Drama', $other->fresh()->name);
+    }
+
+    public function test_soft_obrisana_kategorija_se_ne_prihvata_kao_category_id(): void
+    {
+        $dead = Category::factory()->create();
+        $dead->delete();
+
+        $this->actingAs($this->admin())->post(route('admin.products.store'), [
+            'category_id' => $dead->id, 'name' => 'Nova', 'price' => 10, 'stock' => 3, 'description' => null,
+        ])->assertSessionHasErrors('category_id');
     }
 }
