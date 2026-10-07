@@ -1548,5 +1548,14 @@ select. Regresija: `tests/Feature/Admin/BookIndexImageTest.php` (pada bez
 ispravke). Pravilo: kad se `product:` select-uje po kolonama, proveri da li
 Vue stranica čita još neko polje.
 
+## ✅ REŠENO — header na srpskom (latinica)
+`AuthenticatedLayout.vue` (jedina nav traka; `GuestLayout.vue` nema navigaciju)
+je imao engleske labele, i za gosta i za admina: Shop→Prodavnica, Home→Početna,
+Cart→Korpa, Categories/Products/Books/Authors/Publishers/Orders→Kategorije/
+Proizvodi/Knjige/Autori/Izdavači/Porudžbine, Profile→Profil, Log Out→Odjava,
+Log in→Prijava, Register→Registracija, `'Guest'`→`'Gost'` (desktop i mobilni
+meni). Direktna zamena, bez i18n biblioteke. Nijedan JS/PHP test ne asertuje
+na ove tekstove. Nove nav stavke pisati odmah na srpskom.
+
 ## Planirano/otvoreno
 Trenutno nema otvorenih UX/dizajn stavki.
