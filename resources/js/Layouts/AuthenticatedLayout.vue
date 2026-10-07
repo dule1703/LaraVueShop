@@ -32,7 +32,7 @@ const cart = useCartStore();
               <!-- Navigation Links -->
               <div class="hidden space-x-8 md:-my-px md:ms-10 md:flex">
                 <NavLink :href="route('shop')" :active="route().current('shop')" size="base" class="font-semibold">
-                  Shop
+                  Prodavnica
                 </NavLink>
               </div>
             </div>
@@ -58,22 +58,22 @@ const cart = useCartStore();
               <!-- Admin Links -->
               <div v-if="page.props.auth?.user?.role === 'admin'" class="hidden md:flex space-x-8 text-sm font-medium">
                 <NavLink :href="route('admin.categories.index')" :active="route().current('admin.categories.*')">
-                  Categories
+                  Kategorije
                 </NavLink>
                 <NavLink :href="route('admin.products.index')" :active="route().current('admin.products.*')">
-                  Products
+                  Proizvodi
                 </NavLink>
                 <NavLink :href="route('admin.books.index')" :active="route().current('admin.books.*')">
-                  Books
+                  Knjige
                 </NavLink>
                 <NavLink :href="route('admin.authors.index')" :active="route().current('admin.authors.*')">
-                  Authors
+                  Autori
                 </NavLink>
                 <NavLink :href="route('admin.publishers.index')" :active="route().current('admin.publishers.*')">
-                  Publishers
+                  Izdavači
                 </NavLink>
                 <NavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
-                  Orders
+                  Porudžbine
                 </NavLink>
               </div>
 
@@ -86,7 +86,7 @@ const cart = useCartStore();
                         type="button"
                         class="inline-flex items-center rounded-2xl border border-transparent bg-brand-page px-4 py-2 text-sm font-medium text-brand-header-text hover:bg-brand-card transition"
                       >
-                        {{ page.props.auth?.user?.name ?? 'Guest' }}
+                        {{ page.props.auth?.user?.name ?? 'Gost' }}
                         <svg class="-me-1 ms-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                           <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
                         </svg>
@@ -95,10 +95,10 @@ const cart = useCartStore();
                   </template>
                   <template #content>
                     <DropdownLink :href="route('profile.edit')">
-                      Profile
+                      Profil
                     </DropdownLink>
                     <DropdownLink :href="route('logout')" method="post" as="button">
-                      Log Out
+                      Odjava
                     </DropdownLink>
                   </template>
                 </Dropdown>
@@ -106,8 +106,8 @@ const cart = useCartStore();
 
               <!-- Login / Register -->
               <div v-else class="hidden md:flex items-center gap-x-4 text-sm">
-                <Link :href="route('login')" class="font-medium text-brand-header-muted hover:text-brand-header-text">Log in</Link>
-                <Link :href="route('register')" class="rounded-2xl bg-brand-accent px-5 py-2.5 font-medium text-white hover:bg-brand-accent-hover transition">Register</Link>
+                <Link :href="route('login')" class="font-medium text-brand-header-muted hover:text-brand-header-text">Prijava</Link>
+                <Link :href="route('register')" class="rounded-2xl bg-brand-accent px-5 py-2.5 font-medium text-white hover:bg-brand-accent-hover transition">Registracija</Link>
               </div>
 
               <!-- Hamburger -->
@@ -142,13 +142,13 @@ const cart = useCartStore();
         <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="md:hidden border-t border-black/10 bg-brand-header">
           <div class="space-y-1 pb-3 pt-2 px-4">
             <ResponsiveNavLink :href="route('home')" :active="route().current('home')">
-              Home
+              Početna
             </ResponsiveNavLink>
             <ResponsiveNavLink :href="route('shop')" :active="route().current('shop')">
-              Shop
+              Prodavnica
             </ResponsiveNavLink>
             <ResponsiveNavLink :href="route('cart')" :active="route().current('cart')">
-              Cart
+              Korpa
               <span v-if="cart.itemCount > 0" class="ml-2 inline-flex items-center rounded-full bg-brand-accent px-2 py-1 text-xs font-bold text-white ring-2 ring-brand-page">
                 {{ cart.itemCount }}
               </span>
@@ -157,38 +157,38 @@ const cart = useCartStore();
             <!-- Admin links mobile -->
             <template v-if="page.props.auth?.user?.role === 'admin'">
               <ResponsiveNavLink :href="route('admin.categories.index')" :active="route().current('admin.categories.*')">
-                Categories
+                Kategorije
               </ResponsiveNavLink>
               <ResponsiveNavLink :href="route('admin.products.index')" :active="route().current('admin.products.*')">
-                Products
+                Proizvodi
               </ResponsiveNavLink>
               <ResponsiveNavLink :href="route('admin.books.index')" :active="route().current('admin.books.*')">
-                Books
+                Knjige
               </ResponsiveNavLink>
               <ResponsiveNavLink :href="route('admin.authors.index')" :active="route().current('admin.authors.*')">
-                Authors
+                Autori
               </ResponsiveNavLink>
               <ResponsiveNavLink :href="route('admin.publishers.index')" :active="route().current('admin.publishers.*')">
-                Publishers
+                Izdavači
               </ResponsiveNavLink>
               <ResponsiveNavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
-                Orders
+                Porudžbine
               </ResponsiveNavLink>
             </template>
           </div>
 
           <!-- Responsive User Section -->
           <div v-if="page.props.auth?.user" class="border-t border-black/10 pb-4 pt-4 px-4">
-            <div class="text-base font-medium text-brand-header-text mb-1">{{ page.props.auth?.user?.name ?? 'Guest' }}</div>
+            <div class="text-base font-medium text-brand-header-text mb-1">{{ page.props.auth?.user?.name ?? 'Gost' }}</div>
             <div class="text-sm text-brand-header-muted">{{ page.props.auth?.user?.email }}</div>
             <div class="mt-4 space-y-1">
-              <ResponsiveNavLink :href="route('profile.edit')">Profile</ResponsiveNavLink>
-              <ResponsiveNavLink :href="route('logout')" method="post" as="button">Log Out</ResponsiveNavLink>
+              <ResponsiveNavLink :href="route('profile.edit')">Profil</ResponsiveNavLink>
+              <ResponsiveNavLink :href="route('logout')" method="post" as="button">Odjava</ResponsiveNavLink>
             </div>
           </div>
           <div v-else class="border-t border-black/10 pb-4 pt-4 px-4 space-y-1">
-            <ResponsiveNavLink :href="route('login')">Log in</ResponsiveNavLink>
-            <ResponsiveNavLink :href="route('register')">Register</ResponsiveNavLink>
+            <ResponsiveNavLink :href="route('login')">Prijava</ResponsiveNavLink>
+            <ResponsiveNavLink :href="route('register')">Registracija</ResponsiveNavLink>
           </div>
         </div>
       </nav>
