@@ -2,165 +2,204 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Book;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Console\Command;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Collection;
 
 /**
- * Ručno se pokreće, ne ulazi u deploy pipeline. Idempotentna: proizvodi bez
- * order_items/stock_movements se brišu, ostali se samo deaktiviraju (FK
- * restrict), pa je ponovno pokretanje bezbedno — drugi put ih više nema ili
- * su već neaktivni. Isto važi za kategorije: kategorija sa preostalim
- * (deaktiviranim) proizvodima se ne briše, ali se deaktivira — BookCatalog
- * filter dropdown prikazuje samo `is_active` kategorije (vidi
- * BookCatalog::categoryOptions), pa bi inače ostala vidljiva i posle
- * čišćenja proizvoda.
+ * Ručno se pokreće, ne ulazi u deploy pipeline.
+ *
+ * Soft-briše sve proizvode ciljanih kategorija (i potkategorija), pa same
+ * kategorije (od najdublje ka korenu). Istorija porudžbina/zaliha ostaje
+ * čitljiva: order_items čuvaju snapshot, a relacije ka proizvodu su
+ * withTrashed() (vidi CLAUDE.md, "soft delete"). Pre izvršenja ispisuje plan sa
+ * brojem pogođenih proizvoda/order_items/stock_movements/Book redova i traži
+ * potvrdu. Idempotentna: soft-obrisana kategorija više ne postoji za global
+ * scope, pa se pri ponovnom pokretanju preskače.
+ *
+ * Soft delete proizvoda TVRDO briše povezani Book red (ProductObserver) — ako
+ * plan sadrži bar jedan, komanda staje dok se ne doda --allow-book-delete
+ * (--force to NE zamenjuje).
  */
 class CleanupLegacyCategories extends Command
 {
     private const DEFAULT_CATEGORIES = ['clothes-and-shoes', 'electronics', 'home-appliances'];
 
     protected $signature = 'catalog:cleanup-legacy-categories
-        {--category=* : Slug kategorije za čišćenje (ponovi opciju za više). Podrazumevano: clothes-and-shoes, electronics, home-appliances}
-        {--dry-run : Samo prikaži šta bi bilo obrisano/deaktivirano, bez upisa}';
+        {--category=* : Slug kategorije za čišćenje (ponovi opciju za više). Podrazumevano: clothes-and-shoes, electronics, home-appliances ("books" samo eksplicitno)}
+        {--dry-run : Samo ispiši plan, bez pitanja i bez upisa}
+        {--force : Preskoči pitanje za potvrdu (NE preskače --allow-book-delete)}
+        {--allow-book-delete : Dozvoli da plan tvrdo obriše Book redove proizvoda koji se brišu}';
 
-    protected $description = 'Briše stare ne-knjižne kategorije i njihove proizvode; proizvode i kategorije sa order_items/stock_movements samo deaktivira (ručno pokretanje)';
+    protected $description = 'Soft-briše stare ne-knjižne kategorije i njihove proizvode uz ispis plana i potvrdu (ručno pokretanje)';
 
     public function handle(): int
     {
         $dryRun = (bool) $this->option('dry-run');
         $slugs = $this->option('category') ?: self::DEFAULT_CATEGORIES;
 
-        $totalProductsDeleted = 0;
-        $totalProductsDeactivated = 0;
-        $totalCategoriesDeleted = 0;
-        $totalCategoriesDeactivated = 0;
+        $plans = $this->buildPlans($slugs);
+
+        if ($plans === []) {
+            $this->info('Nema šta da se očisti.');
+
+            return self::SUCCESS;
+        }
+
+        $totals = $this->printPlan($plans, in_array('books', $slugs, true));
+
+        if ($dryRun) {
+            $this->info('DRY RUN — ništa nije izmenjeno.');
+            if ($totals['books'] > 0) {
+                $this->warn('Pravo pokretanje bi tražilo --allow-book-delete (plan tvrdo briše Book redove).');
+            }
+
+            return self::SUCCESS;
+        }
+
+        if ($totals['books'] > 0 && ! $this->option('allow-book-delete')) {
+            $this->error("Plan tvrdo briše {$totals['books']} Book red(ova) (soft delete proizvoda briše knjigu). "
+                .'Ništa nije izmenjeno. Ponovo pokreni sa --allow-book-delete (--force to ne zamenjuje).');
+
+            return self::FAILURE;
+        }
+
+        if (! $this->option('force') && ! $this->confirm('Nastaviti sa soft brisanjem iz plana?', false)) {
+            $this->warn('Prekinuto — ništa nije izmenjeno.');
+
+            return self::SUCCESS;
+        }
+
+        $deletedProducts = 0;
+        $deletedCategories = 0;
+
+        foreach ($plans as $plan) {
+            [$products, $categories] = DB::transaction(fn () => $this->softDeleteTree($plan['category_ids']));
+            $deletedProducts += $products;
+            $deletedCategories += $categories;
+        }
+
+        $this->info("Soft-obrisano: {$deletedProducts} proizvod(a), {$deletedCategories} kategorija.");
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * @param  list<string>  $slugs
+     * @return list<array{root: Category, category_ids: list<int>, products: int, order_items: int, orders: int, stock_movements: int, books: int}>
+     */
+    private function buildPlans(array $slugs): array
+    {
+        $plans = [];
+        $covered = [];
 
         foreach ($slugs as $slug) {
             $root = Category::where('slug', $slug)->first();
+
             if (! $root) {
                 $this->warn("Kategorija \"{$slug}\" ne postoji — preskačem.");
 
                 continue;
             }
 
-            $this->info("== {$root->name} (slug: {$root->slug}) ==");
+            if (in_array($root->id, $covered, true)) {
+                $this->line("Kategorija \"{$slug}\" je već obuhvaćena drugom metom — preskačem.");
+
+                continue;
+            }
 
             $categoryIds = $this->categoryIdsWithDescendants($root);
-            $products = Product::whereIn('category_id', $categoryIds)->orderBy('id')->get();
+            $covered = array_merge($covered, $categoryIds);
 
-            if ($products->isEmpty()) {
-                $this->line('  Nema proizvoda.');
-            }
+            $productIds = Product::whereIn('category_id', $categoryIds)->pluck('id');
+            $orderItems = DB::table('order_items')->whereIn('product_id', $productIds);
 
-            [$toDelete, $toDeactivate] = $products->partition(
-                fn (Product $product) => ! $this->hasHistory($product)
-            );
+            $plans[] = [
+                'root' => $root,
+                'category_ids' => $categoryIds,
+                'products' => $productIds->count(),
+                'order_items' => (clone $orderItems)->count(),
+                'orders' => (clone $orderItems)->distinct()->count('order_id'),
+                'stock_movements' => DB::table('stock_movements')->whereIn('product_id', $productIds)->count(),
+                'books' => Book::whereIn('product_id', $productIds)->count(),
+            ];
+        }
 
-            foreach ($toDelete as $product) {
-                $this->line(($dryRun ? '  [dry-run] ' : '  ')."OBRISATI proizvod: #{$product->id} {$product->name}");
-            }
+        return $plans;
+    }
 
-            foreach ($toDeactivate as $product) {
-                $status = $product->is_active ? 'DEAKTIVIRATI' : 'već neaktivan';
-                $this->line(($dryRun ? '  [dry-run] ' : '  ')."{$status} proizvod (ima porudžbine/zalihe): #{$product->id} {$product->name}");
-            }
+    /**
+     * @param  list<array<string, mixed>>  $plans
+     * @return array{categories: int, products: int, order_items: int, orders: int, stock_movements: int, books: int}
+     */
+    private function printPlan(array $plans, bool $targetsBooks): array
+    {
+        $totals = ['categories' => 0, 'products' => 0, 'order_items' => 0, 'orders' => 0, 'stock_movements' => 0, 'books' => 0];
 
-            $newlyDeactivated = $toDeactivate->filter(fn (Product $product) => $product->is_active)->count();
-            $totalProductsDeleted += $toDelete->count();
-            $totalProductsDeactivated += $newlyDeactivated;
+        $this->newLine();
+        $this->info('PLAN:');
 
-            if (! $dryRun) {
-                DB::transaction(function () use ($toDelete, $toDeactivate) {
-                    foreach ($toDeactivate as $product) {
-                        if ($product->is_active) {
-                            $product->is_active = false;
-                            $product->save();
-                        }
-                    }
+        foreach ($plans as $plan) {
+            $root = $plan['root'];
+            $descendants = count($plan['category_ids']) - 1;
 
-                    foreach ($toDelete as $product) {
-                        $product->forceDelete(); // bez istorije — tvrdo brisanje (soft delete: Problem 2)
-                    }
-                });
-            }
+            $this->line("== {$root->name} (slug: {$root->slug}) ==");
+            $this->line("  Potkategorija: {$descendants}");
+            $this->line("  Proizvoda za soft delete: {$plan['products']}");
+            $this->line("  Pogođenih order_items: {$plan['order_items']} (porudžbina: {$plan['orders']})");
+            $this->line("  stock_movements: {$plan['stock_movements']}");
+            $this->line("  Book redova za TVRDO brisanje: {$plan['books']}");
 
-            // Preostali proizvodi po kategoriji (direktno; category_id se ne nasleđuje niz stablo).
-            $remainingByCategory = $toDeactivate->groupBy('category_id')->map->count();
-
-            foreach (array_reverse($categoryIds) as $categoryId) {
-                [$deleted, $deactivated] = $this->resolveCategory($categoryId, $remainingByCategory, $dryRun);
-                $totalCategoriesDeleted += $deleted;
-                $totalCategoriesDeactivated += $deactivated;
+            $totals['categories'] += count($plan['category_ids']);
+            foreach (['products', 'order_items', 'orders', 'stock_movements', 'books'] as $key) {
+                $totals[$key] += $plan[$key];
             }
         }
 
         $this->newLine();
-        $this->info($dryRun
-            ? "DRY RUN — ništa nije izmenjeno. Obrisalo bi se: {$totalProductsDeleted} proizvod(a) i {$totalCategoriesDeleted} kategorija; deaktiviralo: {$totalProductsDeactivated} proizvod(a) i {$totalCategoriesDeactivated} kategorija."
-            : "Obrisano: {$totalProductsDeleted} proizvod(a), {$totalCategoriesDeleted} kategorija. Deaktivirano: {$totalProductsDeactivated} proizvod(a), {$totalCategoriesDeactivated} kategorija.");
+        $this->line("UKUPNO: kategorija {$totals['categories']}, proizvoda {$totals['products']}, "
+            ."order_items {$totals['order_items']} (porudžbina {$totals['orders']}), "
+            ."stock_movements {$totals['stock_movements']}, Book redova za tvrdo brisanje {$totals['books']}");
 
-        return self::SUCCESS;
+        if ($targetsBooks) {
+            $this->warn('UPOZORENJE: meta uključuje kategoriju "books" — proizvodi sa porudžbinama će biti soft-obrisani (istorija ostaje čitljiva preko snapshot-a).');
+        }
+
+        $this->newLine();
+
+        return $totals;
     }
 
     /**
-     * @param  Collection<int, int>  $remainingByCategory  broj proizvoda sa istorijom po category_id (iz ovog pokretanja)
-     * @return array{0: int, 1: int} [obrisano kategorija, deaktivirano kategorija] (0 ili 1 svaki)
+     * @param  list<int>  $categoryIds  koren prvi, potomci posle (BFS)
+     * @return array{0: int, 1: int} [soft-obrisano proizvoda, soft-obrisano kategorija]
      */
-    private function resolveCategory(int $categoryId, Collection $remainingByCategory, bool $dryRun): array
+    private function softDeleteTree(array $categoryIds): array
     {
-        $category = Category::find($categoryId);
-        if (! $category) {
-            return [0, 0]; // već obrisana u prethodnom pokretanju
-        }
+        $products = 0;
+        $categories = 0;
 
-        $remaining = $dryRun
-            ? $remainingByCategory->get($categoryId, 0)
-            : Product::where('category_id', $categoryId)->count();
-
-        if ($remaining === 0) {
-            if ($dryRun) {
-                $this->line("  [dry-run] OBRISATI kategoriju: {$category->name}");
-
-                return [1, 0];
+        // delete() preko modela (ne query builder-a): okida ProductObserver (Book) i preimenovanje slug-a.
+        Product::whereIn('category_id', $categoryIds)->orderBy('id')->chunkById(100, function ($chunk) use (&$products) {
+            foreach ($chunk as $product) {
+                $product->delete();
+                $products++;
             }
+        });
 
-            try {
-                $category->forceDelete();
-                $this->info("  Kategorija obrisana: {$category->name}");
+        // Od najdublje ka korenu — soft delete ne okida FK nullOnDelete za parent_id.
+        foreach (array_reverse($categoryIds) as $categoryId) {
+            $category = Category::find($categoryId);
 
-                return [1, 0];
-            } catch (QueryException $e) {
-                $this->warn("  Kategorija NIJE obrisana (FK ograničenje): {$category->name}");
-
-                return [0, 0];
+            if ($category) {
+                $category->delete();
+                $categories++;
             }
         }
 
-        if (! $category->is_active) {
-            $this->line("  Kategorija već neaktivna: {$category->name} ({$remaining} proizvod(a) sa istorijom)");
-
-            return [0, 0];
-        }
-
-        $action = $dryRun ? 'DEAKTIVIRATI kategoriju' : 'Kategorija deaktivirana';
-        $this->line(($dryRun ? '  [dry-run] ' : '  ')."{$action}: {$category->name} — i dalje ima {$remaining} proizvod(a) sa istorijom porudžbina/zaliha (ne prikazuje se u filterima kataloga).");
-
-        if (! $dryRun) {
-            $category->is_active = false;
-            $category->save();
-        }
-
-        return [0, 1];
-    }
-
-    private function hasHistory(Product $product): bool
-    {
-        return DB::table('order_items')->where('product_id', $product->id)->exists()
-            || DB::table('stock_movements')->where('product_id', $product->id)->exists();
+        return [$products, $categories];
     }
 
     /** @return list<int> */
