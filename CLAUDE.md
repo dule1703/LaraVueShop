@@ -1539,5 +1539,14 @@ slušalice, kategorija "Electronics" deaktivirana preko ranijeg
 `catalog:cleanup-legacy-categories`) — select sad prikazuje "Electronics
 (neaktivna)" umesto praznog polja.
 
+## ✅ REŠENO — admin lista knjiga nije prikazivala slike
+`Admin\BookController@index` je eager-load-ovao `product:id,name,slug,price,
+stock,is_active` bez `image`, pa je `book.product.image` u `Admin/Books/
+Index.vue` uvek bio `undefined` i `BookCoverPlaceholder` je padao na
+tipografski fallback (šema/putanje nisu bili problem). Dodato `image` u
+select. Regresija: `tests/Feature/Admin/BookIndexImageTest.php` (pada bez
+ispravke). Pravilo: kad se `product:` select-uje po kolonama, proveri da li
+Vue stranica čita još neko polje.
+
 ## Planirano/otvoreno
 Trenutno nema otvorenih UX/dizajn stavki.
