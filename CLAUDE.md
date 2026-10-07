@@ -290,29 +290,45 @@ Otkriveno u auditu; svaki novi deo kataloga povećava štetu od ovih rupa:
 ## Čišćenje legacy podataka i UI filter (Faza 3, deo 3)
 - Kategorija **"Books"** (slug `books`) **NIJE prazna** — i dalje ima proizvode
   koji nikad nisu konvertovani u `books` red (otkriveno auditom pre čišćenja),
-  a bar jedan od njih ima `order_items` (stvarne test porudžbine). Zato je
-  **namerno isključena** iz `catalog:cleanup-legacy-categories` — korisnik ih
-  ručno rešava kroz admin.
+  a bar jedan od njih ima `order_items` (stvarne test porudžbine). Zato **nije
+  u podrazumevanoj listi** `catalog:cleanup-legacy-categories` — čisti se samo
+  eksplicitno preko `--category=books`.
 - `php artisan catalog:cleanup-legacy-categories` — ručna, idempotentna komanda
-  (isti obrazac kao `catalog:convert-products-to-books`). Podrazumevano cilja
-  `clothes-and-shoes`, `electronics`, `home-appliances` (`--category=slug`,
-  ponovljivo, menja listu; `--dry-run` ne upisuje ništa).
-  - Proizvod bez `order_items`/`stock_movements` → **briše se**.
-  - Proizvod SA `order_items` ili `stock_movements` (FK `restrict`, isti
-    obrazac kao kod knjiga) → **samo se deaktivira** (`is_active = false`),
-    nikad ne briše — istorija porudžbina/zaliha se ne sme izgubiti.
-  - Kategorija se briše samo ako joj ne ostane nijedan proizvod (aktivan ili
-    deaktiviran); ako joj ostane, **kategorija se takođe deaktivira**
-    (`is_active = false`), ne samo proizvodi. Bitno: `BookCatalog::
-    categoryOptions()` filtrira dropdown filtera isključivo po
-    `Category.is_active`, bez provere da li kategorija ima ijedan
-    aktivan proizvod/knjigu — bez ove deaktivacije bi prazna legacy
-    kategorija ostala vidljiva u filteru i posle čišćenja proizvoda.
+  (isti obrazac kao `catalog:convert-products-to-books`). **Soft-briše** sve
+  proizvode ciljanih kategorija (i potkategorija), pa kategorije od najdublje
+  ka korenu. Istorija porudžbina/zaliha ostaje (snapshot u `order_items`,
+  `withTrashed()` relacije — vidi "brisanje proizvoda/kategorija" niže); nema
+  više deaktivacije (stara logika "proizvod sa istorijom se samo deaktivira"
+  je ukinuta). Podrazumevano cilja `clothes-and-shoes`, `electronics`,
+  `home-appliances`; `--category=slug` (ponovljivo) **menja** listu.
+  - **Plan se ispisuje pre izvršenja**, po kategoriji i ukupno: broj
+    potkategorija, proizvoda, pogođenih `order_items` (i porudžbina),
+    `stock_movements` i `Book` redova. Za `books` još i vidljivo upozorenje.
+  - Flagovi: `--dry-run` (samo plan, bez pitanja i upisa), `--force`
+    (preskače `confirm()`; bez njega pitanje ima podrazumevano "ne", pa
+    `--no-interaction` ne briše ništa), `--allow-book-delete`.
+  - **`--allow-book-delete`:** soft delete proizvoda TVRDO briše povezani
+    `Book` (`ProductObserver::deleted`). Ako plan sadrži bar jedan `Book` red,
+    komanda staje (exit 1, ništa izmenjeno) dok se ne doda ovaj flag —
+    `--force` ga **ne** zamenjuje. U `--dry-run` ne staje, samo upozori.
+  - Jedna `DB::transaction` po korenskoj kategoriji (pad vraća proizvode i
+    kategorije te mete). Ponovno pokretanje: soft-obrisana kategorija više ne
+    postoji za global scope → "Nema šta da se očisti." Meta već obuhvaćena
+    drugom metom (npr. roditelj + dete) se preskače.
+  - `BookCatalog::categoryOptions()` filtrira samo po `is_active` + global
+    scope, pa obrisana kategorija nestaje iz filtera kataloga.
+  - **`execute()` je rezervisano ime u `Illuminate\Console\Command`** — privatna
+    metoda tog imena puca fatalnom greškom (privatna pomoćna metoda je zato
+    `softDeleteTree`).
   - **Ne ide u deploy pipeline** — pokreće se ručno na svakom okruženju
-    posebno (isto pravilo kao ostale `catalog:*` komande).
-  - Testovi: `tests/Feature/Console/CleanupLegacyCategoriesTest.php`
-    (uključuje proveru da deaktivirana kategorija nestane iz
-    `BookCatalog::options()`).
+    posebno (isto pravilo kao ostale `catalog:*` komande). Preporuka: prvo
+    `--dry-run` na tom okruženju.
+  - Testovi: `tests/Feature/Console/CleanupLegacyCategoriesTest.php` (20 —
+    soft delete sa/bez istorije, potkategorije, dry-run, potvrda da/ne,
+    `--no-interaction`, `books` samo eksplicitno, `--allow-book-delete`,
+    transakcija, idempotentnost). `--no-interaction` se testira preko
+    `Artisan::call()`, ne `$this->artisan()` (potonji mock-uje OutputStyle i
+    pada na neočekivanom `confirm()` pitanju).
 - `Shop.vue`: uklonjeno dugme "Primeni". Svi filteri se sada primenjuju
   automatski — select/checkbox filteri odmah (`@change`), cena
   (`price_min`/`price_max`) sa debounce-om od 400ms da kucanje ne šalje upit
@@ -1590,9 +1606,8 @@ brisanje proizvoda iz porudžbina).
   `OrderController::store` (`Product::find`) tiho odbijaju obrisane proizvode.
 - **Tvrdo brisanje u testovima/komandama:** testovi koji proveravaju DB-nivo
   FK (`restrict`/`nullOnDelete`) koriste `forceDelete()`.
-  `catalog:cleanup-legacy-categories` je privremeno prebačena na
-  `forceDelete()` (isto ponašanje kao ranije) — prelazi na soft delete u
-  sledećem koraku.
+  `catalog:cleanup-legacy-categories` je prešla na soft delete (vidi "Čišćenje
+  legacy podataka" gore).
 - `Admin\BookController::destroy` i dalje odbija knjigu iz porudžbine (nije
   menjano) iako bi soft delete to sada dozvolio — poslovna odluka, otvoreno.
 - **Validacija i soft delete:** `unique` nad `products.name`/`categories.name`
