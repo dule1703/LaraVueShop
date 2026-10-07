@@ -40,7 +40,7 @@ class InventoryService
             }
 
             foreach ($order->items as $item) {
-                Product::whereKey($item->product_id)->increment('stock', $item->quantity);
+                Product::withTrashed()->whereKey($item->product_id)->increment('stock', $item->quantity);
 
                 StockMovement::create([
                     'product_id' => $item->product_id,

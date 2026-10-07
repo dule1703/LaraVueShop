@@ -33,6 +33,7 @@ class BookController extends Controller
         $books = Book::query()
             ->select('books.*')
             ->join('products', 'products.id', '=', 'books.product_id')
+            ->whereNull('products.deleted_at')
             ->with(['product:id,name,slug,price,stock,is_active,image', 'publisher:id,name', 'authors:id,name'])
             ->when($lowStock, function ($query) use ($threshold) {
                 // stock IS NULL = neograničena zaliha (e-knjiga) — nikad "niska".

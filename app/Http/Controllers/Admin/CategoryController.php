@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Database\QueryException;
+use Illuminate\Validation\Rule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Redirect;
@@ -37,7 +39,7 @@ class CategoryController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255|unique:categories',
+            'name' => ['required', 'string', 'max:255', Rule::unique('categories', 'name')->whereNull('deleted_at')],
             'description' => 'nullable|string',
             'is_active' => 'boolean'
         ]);
@@ -76,7 +78,7 @@ class CategoryController extends Controller
     public function update(Request $request, Category $category)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name,' . $category->id,
+            'name' => ['required', 'string', 'max:255', Rule::unique('categories', 'name')->whereNull('deleted_at')->ignore($category->id)],
             'description' => 'nullable|string',
             'is_active' => 'boolean'
         ]);
@@ -96,7 +98,20 @@ class CategoryController extends Controller
      */
     public function destroy(Category $category)
     {
-        $category->delete();
+        // Soft delete ne okida FK cascade, pa proizvodi/potkategorije moraju da se provere ručno.
+        if ($category->products()->exists() || $category->children()->exists()) {
+            return Redirect::route('admin.categories.index')
+                ->with('error', 'Kategorija ima proizvode ili potkategorije i ne može se obrisati. Premesti ih ili obriši prvo, ili deaktiviraj kategoriju.');
+        }
+
+        try {
+            $category->delete();
+        } catch (QueryException $e) {
+            report($e);
+
+            return Redirect::route('admin.categories.index')
+                ->with('error', 'Kategoriju trenutno nije moguće obrisati. Deaktiviraj je umesto toga.');
+        }
 
         return Redirect::route('admin.categories.index')->with('success', 'Kategorija je uspešno obrisana.');
     }

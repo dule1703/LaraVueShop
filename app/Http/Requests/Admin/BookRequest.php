@@ -33,11 +33,11 @@ class BookRequest extends FormRequest
 
         return [
             // Product
-            'category_id' => ['required', 'integer', Rule::exists('categories', 'id')],
+            'category_id' => ['required', 'integer', Rule::exists('categories', 'id')->whereNull('deleted_at')],
             'name' => ['required', 'string', 'max:255'],
             'slug' => [
                 'required', 'string', 'max:255', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
-                Rule::unique('products', 'slug')->ignore($book?->product_id),
+                Rule::unique('products', 'slug')->whereNull('deleted_at')->ignore($book?->product_id),
             ],
             'description' => ['nullable', 'string'],
             'price' => ['required', 'numeric', 'min:0', 'max:99999999.99'],

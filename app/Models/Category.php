@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\SoftDeletesFreeingSlug;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Category extends Model
 {
     use HasFactory;
+    use SoftDeletesFreeingSlug;
 
     protected $fillable = ['parent_id', 'position', 'name', 'slug', 'description', 'is_active'];
 
