@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Database\QueryException;
+use Illuminate\Validation\Rule;
 use App\Models\Product;
 use App\Models\Category;
 use App\Support\ProductImageUploader;
@@ -41,8 +43,8 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'category_id' => 'required|exists:categories,id',
-            'name' => 'required|string|max:255|unique:products,name',
+            'category_id' => ['required', Rule::exists('categories', 'id')->whereNull('deleted_at')],
+            'name' => ['required', 'string', 'max:255', Rule::unique('products', 'name')->whereNull('deleted_at')],
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
@@ -91,8 +93,8 @@ class ProductController extends Controller
 public function update(Request $request, Product $product)
     {
         $validated = $request->validate([
-            'category_id' => 'required|exists:categories,id',
-            'name' => 'required|string|max:255|unique:products,name,' . $product->id,
+            'category_id' => ['required', Rule::exists('categories', 'id')->whereNull('deleted_at')],
+            'name' => ['required', 'string', 'max:255', Rule::unique('products', 'name')->whereNull('deleted_at')->ignore($product->id)],
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
@@ -120,7 +122,14 @@ public function update(Request $request, Product $product)
      */
     public function destroy(Product $product)
     {
-        $product->delete();
+        try {
+            $product->delete();
+        } catch (QueryException $e) {
+            report($e);
+
+            return Redirect::route('admin.products.index')
+                ->with('error', 'Proizvod trenutno nije moguće obrisati. Deaktiviraj ga umesto toga.');
+        }
 
         return Redirect::route('admin.products.index')->with('success', 'Proizvod je uspešno obrisan.');
     }

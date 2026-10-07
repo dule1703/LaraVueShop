@@ -21,4 +21,21 @@ class ProductObserver
             BookSearchIndexer::sync($book);
         }
     }
+
+    /**
+     * Soft delete proizvoda tvrdo briše povezanu knjigu (author_book ide kaskadno
+     * preko FK), da ne ostanu siročad Book redovi koje bi brojali autori/izdavači
+     * i koji bi držali ISBN. Pokreće se unutar transakcije iz
+     * SoftDeletesFreeingSlug::delete(), pa pad brisanja knjige poništava i soft
+     * delete proizvoda. forceDelete() preskačemo — FK cascade već briše knjigu.
+     * Cena: restore proizvoda ne vraća knjigu.
+     */
+    public function deleted(Product $product): void
+    {
+        if ($product->isForceDeleting()) {
+            return;
+        }
+
+        $product->book?->delete();
+    }
 }

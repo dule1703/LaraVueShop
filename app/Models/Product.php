@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\SoftDeletesFreeingSlug;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Product extends Model
 {
     use HasFactory;
+    use SoftDeletesFreeingSlug;
 
     protected $fillable = [
         'category_id',
@@ -22,7 +24,7 @@ class Product extends Model
 
     public function category()
     {
-        return $this->belongsTo(Category::class);
+        return $this->belongsTo(Category::class)->withTrashed();
     }
 
     public function book()
