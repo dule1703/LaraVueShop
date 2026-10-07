@@ -251,7 +251,7 @@ class BookCrudTest extends TestCase
             ->delete(route('admin.books.destroy', $book))
             ->assertRedirect(route('admin.books.index'));
 
-        $this->assertDatabaseCount('products', 0);
+        $this->assertSoftDeleted('products', ['id' => $book->product_id]);
         $this->assertDatabaseCount('books', 0);
         $this->assertDatabaseCount('author_book', 0);
         $this->assertModelExists($author);

@@ -135,10 +135,12 @@ class AdminAccessTest extends TestCase
 
     public function test_admin_can_destroy_category(): void
     {
-        $response = $this->actingAs($this->admin())->delete(route('admin.categories.destroy', $this->category));
+        $empty = Category::factory()->create();
+
+        $response = $this->actingAs($this->admin())->delete(route('admin.categories.destroy', $empty));
 
         $response->assertRedirect(route('admin.categories.index'));
-        $this->assertModelMissing($this->category);
+        $this->assertSoftDeleted($empty);
     }
 
     public function test_admin_can_store_product(): void
@@ -176,7 +178,7 @@ class AdminAccessTest extends TestCase
         $response = $this->actingAs($this->admin())->delete(route('admin.products.destroy', $this->product));
 
         $response->assertRedirect(route('admin.products.index'));
-        $this->assertModelMissing($this->product);
+        $this->assertSoftDeleted($this->product);
     }
 
     public function test_admin_can_update_order_status(): void

@@ -83,7 +83,7 @@ class CleanupLegacyCategories extends Command
                     }
 
                     foreach ($toDelete as $product) {
-                        $product->delete();
+                        $product->forceDelete(); // bez istorije — tvrdo brisanje (soft delete: Problem 2)
                     }
                 });
             }
@@ -129,7 +129,7 @@ class CleanupLegacyCategories extends Command
             }
 
             try {
-                $category->delete();
+                $category->forceDelete();
                 $this->info("  Kategorija obrisana: {$category->name}");
 
                 return [1, 0];

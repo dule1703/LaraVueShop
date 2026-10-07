@@ -28,6 +28,10 @@ defineProps({
                     {{ page.props.flash.success }}
                 </div>
 
+                <div v-if="page.props.flash?.error" class="mb-6 rounded-xl border border-red-400 bg-red-50 p-4 text-red-700">
+                    {{ page.props.flash.error }}
+                </div>
+
                 <AdminPageHeader title="Proizvodi">
                     <template #actions>
                         <Link

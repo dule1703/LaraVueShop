@@ -36,7 +36,8 @@ class CategoryTreeTest extends TestCase
         $parent = Category::factory()->create();
         $child = Category::factory()->childOf($parent)->create();
 
-        $parent->delete();
+        // Tvrdo brisanje — proverava DB-nivo nullOnDelete (soft delete ga ne okida).
+        $parent->forceDelete();
 
         $this->assertDatabaseHas('categories', ['id' => $child->id, 'parent_id' => null]);
     }

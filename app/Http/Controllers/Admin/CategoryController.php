@@ -96,7 +96,20 @@ class CategoryController extends Controller
      */
     public function destroy(Category $category)
     {
-        $category->delete();
+        // Soft delete ne okida FK cascade, pa proizvodi/potkategorije moraju da se provere ručno.
+        if ($category->products()->exists() || $category->children()->exists()) {
+            return Redirect::route('admin.categories.index')
+                ->with('error', 'Kategorija ima proizvode ili potkategorije i ne može se obrisati. Premesti ih ili obriši prvo, ili deaktiviraj kategoriju.');
+        }
+
+        try {
+            $category->delete();
+        } catch (QueryException $e) {
+            report($e);
+
+            return Redirect::route('admin.categories.index')
+                ->with('error', 'Kategoriju trenutno nije moguće obrisati. Deaktiviraj je umesto toga.');
+        }
 
         return Redirect::route('admin.categories.index')->with('success', 'Kategorija je uspešno obrisana.');
     }

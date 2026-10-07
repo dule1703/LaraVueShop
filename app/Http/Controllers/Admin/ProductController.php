@@ -120,7 +120,14 @@ public function update(Request $request, Product $product)
      */
     public function destroy(Product $product)
     {
-        $product->delete();
+        try {
+            $product->delete();
+        } catch (QueryException $e) {
+            report($e);
+
+            return Redirect::route('admin.products.index')
+                ->with('error', 'Proizvod trenutno nije moguće obrisati. Deaktiviraj ga umesto toga.');
+        }
 
         return Redirect::route('admin.products.index')->with('success', 'Proizvod je uspešno obrisan.');
     }

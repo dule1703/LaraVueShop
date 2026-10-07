@@ -83,6 +83,17 @@ class StockMovementTest extends TestCase
         $movement = StockMovement::factory()->create();
 
         $this->expectException(QueryException::class);
-        $movement->product->delete();
+        $movement->product->forceDelete();
+    }
+
+    public function test_proizvod_sa_istorijom_zaliha_moze_da_se_soft_obrise(): void
+    {
+        $movement = StockMovement::factory()->create();
+        $product = $movement->product;
+
+        $product->delete();
+
+        $this->assertSoftDeleted($product);
+        $this->assertSame($product->id, $movement->fresh()->product->id);
     }
 }

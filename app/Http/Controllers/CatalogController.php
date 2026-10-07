@@ -32,6 +32,7 @@ class CatalogController extends Controller
             ->select('books.*')
             ->join('products', 'products.id', '=', 'books.product_id')
             ->where('products.is_active', true)
+            ->whereNull('products.deleted_at')
             ->where('products.slug', $slug)
             ->with(['product.category:id,name,slug', 'publisher:id,name,slug', 'authors:id,name,slug'])
             ->firstOrFail();

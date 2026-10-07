@@ -64,6 +64,7 @@ class BookCatalog
             ->select('books.*')
             ->join('products', 'products.id', '=', 'books.product_id')
             ->where('products.is_active', true)
+            ->whereNull('products.deleted_at')
             ->with([
                 'product:id,category_id,name,slug,price,stock,image',
                 'authors:id,name,slug',

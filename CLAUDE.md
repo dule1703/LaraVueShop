@@ -1557,5 +1557,46 @@ Log in→Prijava, Register→Registracija, `'Guest'`→`'Gost'` (desktop i mobil
 meni). Direktna zamena, bez i18n biblioteke. Nijedan JS/PHP test ne asertuje
 na ove tekstove. Nove nav stavke pisati odmah na srpskom.
 
+## ✅ REŠENO — brisanje proizvoda/kategorija (FK 1451) → soft delete
+`DELETE /admin/products/{id}` i `/admin/categories/{id}` su pucali sa
+QueryException 1451 (`order_items.product_id` je `restrict`; a
+`products.category_id` je `cascade`, pa je brisanje kategorije povlačilo
+brisanje proizvoda iz porudžbina).
+- Migracija `2026_10_07_100000_add_soft_deletes_to_products_and_categories_table`
+  samo dodaje nullable `deleted_at` (unazad kompatibilno, expand/contract).
+  **Treba `php artisan migrate` na svakom okruženju** (deploy pipeline je
+  već pokreće).
+- `Product` i `Category` koriste `app/Models/Concerns/SoftDeletesFreeingSlug`:
+  soft delete preimenuje slug u `slug-deleted-{id}` (slug je `unique`, id je
+  jedinstven, kolona je varchar(255)) i `delete()` ide u `DB::transaction`.
+  `restore()` slug NE vraća (nema restore UI-ja).
+- **`Book` NEMA SoftDeletes (odluka).** `ProductObserver::deleted` tvrdo briše
+  povezanu `Book` (author_book ide kaskadno preko FK) unutar iste transakcije
+  kao soft delete proizvoda — pad brisanja knjige poništava i soft delete.
+  Zato nema siročadi `Book` redova (koji bi lažno brojali
+  `Author/Publisher::withCount('books')`, blokirali brisanje autora i držali
+  `books.isbn13` unique indeks). Cena: restore proizvoda ne vraća knjigu.
+  `forceDelete()` preskače observer (FK cascade radi isto).
+- `Category` se ne briše dok ima (ne-obrisane) proizvode ili potkategorije
+  (soft delete ne okida FK cascade/`nullOnDelete`) — flash `error`, prikazan
+  na `Admin/Categories/Index.vue` i `Admin/Products/Index.vue` (dodat blok).
+  `destroy` metode hvataju `QueryException` kao poslednju zaštitu.
+- `OrderItem::product()`, `StockMovement::product()`, `Product::category()`
+  su `withTrashed()` (stare porudžbine/istorija zaliha se i dalje prikazuju);
+  `InventoryService::restoreStock` koristi `Product::withTrashed()` za povrat
+  zaliha. Global scope ne važi za JOIN-ove, pa `BookCatalog::query`,
+  `CatalogController::show` i `Admin\BookController@index` imaju eksplicitno
+  `whereNull('products.deleted_at')`. Korpa (`/api/cart/products`) i
+  `OrderController::store` (`Product::find`) tiho odbijaju obrisane proizvode.
+- **Tvrdo brisanje u testovima/komandama:** testovi koji proveravaju DB-nivo
+  FK (`restrict`/`nullOnDelete`) koriste `forceDelete()`.
+  `catalog:cleanup-legacy-categories` je privremeno prebačena na
+  `forceDelete()` (isto ponašanje kao ranije) — prelazi na soft delete u
+  sledećem koraku.
+- `Admin\BookController::destroy` i dalje odbija knjigu iz porudžbine (nije
+  menjano) iako bi soft delete to sada dozvolio — poslovna odluka, otvoreno.
+- Testovi: `tests/Feature/Catalog/SoftDeleteTest.php` (12). Pun suite:
+  `php artisan test` 415 passed.
+
 ## Planirano/otvoreno
 Trenutno nema otvorenih UX/dizajn stavki.
